@@ -414,6 +414,19 @@
     padding:5px 0 7px;background:#ffffffb0;border-top:1px solid #dde3ea;font-weight:600;
   }
 
+/* ============ LOG / VENCIMENTOS / RELATÓRIO ============ */
+.log-list{display:flex;flex-direction:column;gap:5px;max-height:56vh;overflow:auto;margin:8px 0 12px;}
+.log-row{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;background:#f7f8fb;border:1px solid #e5e9f0;border-radius:8px;padding:7px 10px;font-size:12px;}
+.log-row .lt{color:var(--mut);font-size:10.5px;grid-column:1/3;}
+.log-row .la{font-weight:800;color:var(--navy);}
+.log-row .lo{color:var(--ink);}
+.venc-badge{background:#c0392b!important;color:#fff!important;}
+.docrow .venc{font-size:10px;font-weight:800;border-radius:6px;padding:3px 7px;flex:none;}
+.docrow .venc.ok{background:#e2f6ec;color:#1fae63;}
+.docrow .venc.warn{background:#fdf3e3;color:#b45309;}
+.docrow .venc.bad{background:#fbe9e7;color:#c0392b;}
+.docrow .cat{font-size:9.5px;font-weight:800;letter-spacing:.05em;background:#e8ecf4;color:#40516b;border-radius:6px;padding:3px 7px;flex:none;}
+
 /* ============ DOCUMENTOS DO MILITAR ============ */
 .doclist{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}
 .docrow{display:flex;align-items:center;gap:8px;background:#f4f6fa;border:1px solid #e3e8ef;
@@ -521,6 +534,9 @@
 </header>
 
 <div id="admBar"><span>🔐 MODO ADMINISTRADOR — edição total liberada</span><span class="sp"></span>
+  <button class="novo" onclick="admVencimentos()" id="admVencBtn">⚠ Vencimentos</button>
+  <button class="novo" onclick="admLog()">📋 Log</button>
+  <button class="novo" onclick="admRelatorio()">🖨 Relatório</button>
   <button class="novo" onclick="admSecoes()">🗂 Pastas / Seções</button>
   <button class="novo" onclick="admOpenForm(null)">＋ Novo militar</button>
   <button class="sair" onclick="admLogout()">Sair</button></div>
@@ -3756,6 +3772,7 @@ function rebuildEfetivo(){
 function rerenderAll(){
   rebuildEfetivo();
   renderGrid();
+  if(ADM&&typeof updateVencBadge==='function') updateVencBadge();
   if(CUR){
     var rg=CUR.rg;
     if(document.getElementById('cardOv').classList.contains('open')){
@@ -3831,10 +3848,12 @@ function admLoginTry(){
   if(FB_DB && !ADMIN_SET){ FB_DB.ref('coeid/admins').set(ADMIN_FALLBACK).catch(function(){}); }
   document.getElementById('admLoginOv').classList.remove('open');
   document.getElementById('admBar').classList.add('on');
-  renderGrid();
+  renderGrid(); updateVencBadge();
+  logAcao('Login administrador','RG '+rg);
   toast('Modo administrador ativado — RG '+rg);
 }
 function admLogout(){
+  logAcao('Logout administrador','RG '+ADM);
   ADM=null;
   try{ sessionStorage.removeItem('coeid_adm'); }catch(e){}
   document.getElementById('admBar').classList.remove('on');
@@ -3851,6 +3870,7 @@ function admEditField(k){
   if(v===null) return;
   var d={}; d[k]=v.trim();
   saveOvr(CUR.rg,{dados:d});
+  logAcao('Editou campo "'+k+'"', CUR.nome+' (RG '+CUR.rg+')');
   var rg=CUR.rg;
   if(document.getElementById('sheetOv').classList.contains('open')){ closeSheet(); }
   openCard(rg);
@@ -3913,6 +3933,7 @@ function admFormSave(){
   if(!FORM_RG) patch.novo=true;
   if(FORM_FOTO) patch.foto=FORM_FOTO;
   saveOvr(rg,patch);
+  logAcao(FORM_RG?'Editou militar':'Cadastrou militar', posto+' '+nome+' (RG '+rg+')');
   document.getElementById('admFormOv').classList.remove('open');
   toast((FORM_RG?'Dados atualizados: ':'Militar cadastrado: ')+nome.split(' ')[0]);
 }
@@ -3922,6 +3943,7 @@ function admDelete(rg){
   if(!window.confirm('Excluir '+m.posto+' '+m.nome+' (RG '+rg+') do painel?')) return;
   var base=EFETIVO_BASE.some(function(x){return x.rg===rg;});
   if(base) saveOvr(rg,{del:true}); else removeOvr(rg);
+  logAcao('Excluiu militar', m.posto+' '+m.nome+' (RG '+rg+')');
   toast('Militar removido do painel');
 }
 
@@ -3969,6 +3991,7 @@ function admSecAdd(){
   if(allReps().indexOf(nm)>=0){ err.textContent='Já existe pasta com esse nome.'; err.classList.add('on'); return; }
   SECOES_CUSTOM[nm]={cor:cor}; secLS();
   if(FB_DB) FB_DB.ref('coeid/secoes/'+nm.replace(/[.#$\[\]\/]/g,'_')).set({cor:cor}).catch(function(){});
+  logAcao('Criou pasta', nm);
   rerenderAll(); admSecoes();
   toast('Pasta "'+nm+'" criada — mova militares pelo cadastro deles');
 }
@@ -3979,6 +4002,7 @@ function admSecDel(nm){
   Object.keys(OVR).forEach(function(rg){
     if(OVR[rg]&&OVR[rg].rep===nm) saveOvr(rg,{rep:null});
   });
+  logAcao('Excluiu pasta', nm);
   rerenderAll(); admSecoes();
   toast('Pasta excluída');
 }
@@ -3990,7 +4014,11 @@ function docsListHTML(m){
   if(!ks.length) return '<div class="doc-empty">Nenhum documento anexado até o momento.<br>Os PDFs deste militar serão inseridos pelo administrador.</div>';
   return '<div class="doclist">'+ks.map(function(id){
     var d=ds[id], q=d.q?new Date(d.q).toLocaleDateString('pt-BR'):'';
-    return '<div class="docrow"><span class="dn">📄 '+esc(d.n)+'</span><span class="dq">'+q+'</span>'+
+    var vi=vencInfo(d.val);
+    return '<div class="docrow"><span class="dn">📄 '+esc(d.n)+'</span>'+
+      (d.cat?'<span class="cat">'+esc(d.cat)+'</span>':'')+
+      (vi?'<span class="venc '+vi.cls+'">'+vi.txt+'</span>':'')+
+      '<span class="dq">'+q+'</span>'+
       '<button class="abrir" onclick="docOpen(\''+escq(m.rg)+'\',\''+escq(id)+'\')">Abrir</button>'+
       (ADM?'<button class="del" onclick="docDel(\''+escq(m.rg)+'\',\''+escq(id)+'\')">🗑</button>':'')+
       '</div>';
@@ -4005,29 +4033,71 @@ function docDel(rg,id){
   if(!window.confirm('Excluir o documento?')) return;
   if(OVR[rg]&&OVR[rg].docs) delete OVR[rg].docs[id];
   ovrLS(); if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).remove().catch(function(){});
+  logAcao('Excluiu documento', 'RG '+rg);
   rerenderAll(); if(CUR) { openCard(rg); switchFS('docs'); }
 }
+var DOC_CATS=['IDENTIDADE','CNH','APTIDÃO','CURSO','AJD','SAÚDE','ELOGIO/PUNIÇÃO','OUTROS'];
+var DOC_FILE=null;
 function admAddDoc(){
   if(!ADM){ admToast(); return; }
   if(!CUR) return;
-  var inp=document.createElement('input'); inp.type='file';
-  inp.accept='application/pdf,image/*';
+  DOC_FILE=null;
+  var ov=document.getElementById('docFormOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.className='adm-ov'; ov.id='docFormOv';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.classList.remove('open'); });
+  }
+  ov.innerHTML='<div class="adm-box"><h3>📄 Anexar documento</h3>'+
+    '<div class="sub">'+esc(CUR.posto+' '+CUR.nome)+' · RG '+esc(CUR.rg)+'</div>'+
+    '<label>Arquivo (PDF ou imagem · até 3 MB)</label>'+
+    '<div class="adm-foto"><div class="pv" id="dfPv" style="width:auto;min-width:120px;padding:0 10px;">nenhum arquivo</div>'+
+    '<button onclick="docPick()">Escolher arquivo</button></div>'+
+    '<label>Nome do documento</label><input id="dfNome" autocomplete="off" placeholder="ex.: CNH 2026, Certificado CAT">'+
+    '<label>Categoria</label><select id="dfCat">'+DOC_CATS.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select>'+
+    '<label>Validade / Vencimento (opcional)</label><input id="dfVal" type="date">'+
+    '<div class="err" id="dfErr"></div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'docFormOv\').classList.remove(\'open\')">Cancelar</button>'+
+    '<button class="ok" onclick="docSave()">Salvar</button></div></div>';
+  ov.classList.add('open');
+}
+function docPick(){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf,image/*';
   inp.onchange=function(e){
     var f=e.target.files&&e.target.files[0]; if(!f) return;
-    if(f.size>3*1024*1024){ toast('Arquivo acima de 3 MB — reduza o PDF antes de anexar'); return; }
-    var rg=CUR.rg, rd=new FileReader();
-    rd.onload=function(){
-      var id='d'+Date.now();
-      var doc={n:f.name,t:f.type,d:rd.result,q:Date.now()};
-      var o=OVR[rg]||{}; o.docs=o.docs||{}; o.docs[id]=doc; OVR[rg]=o; ovrLS();
-      if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).set(doc).catch(function(){ toast('Sem conexão — salvo apenas neste dispositivo'); });
-      rerenderAll(); openCard(rg); switchFS('docs');
-      toast('Documento anexado: '+f.name);
-    };
-    rd.onerror=function(){ toast('Falha ao ler o arquivo'); };
-    rd.readAsDataURL(f);
+    if(f.size>3*1024*1024){ document.getElementById('dfErr').textContent='Arquivo acima de 3 MB.'; document.getElementById('dfErr').classList.add('on'); return; }
+    DOC_FILE=f;
+    document.getElementById('dfPv').textContent=f.name;
+    if(!document.getElementById('dfNome').value) document.getElementById('dfNome').value=f.name.replace(/\.[^.]+$/,'');
   };
   inp.click();
+}
+function docSave(){
+  var err=document.getElementById('dfErr');
+  if(!DOC_FILE){ err.textContent='Escolha um arquivo.'; err.classList.add('on'); return; }
+  var nome=document.getElementById('dfNome').value.trim()||DOC_FILE.name;
+  var cat=document.getElementById('dfCat').value;
+  var val=document.getElementById('dfVal').value||null;
+  var rg=CUR.rg, rd=new FileReader();
+  rd.onload=function(){
+    var id='d'+Date.now();
+    var doc={n:nome,t:DOC_FILE.type,d:rd.result,q:Date.now(),cat:cat,val:val};
+    var o=OVR[rg]||{}; o.docs=o.docs||{}; o.docs[id]=doc; OVR[rg]=o; ovrLS();
+    if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).set(doc).catch(function(){ toast('Sem conexão — salvo apenas neste dispositivo'); });
+    logAcao('Anexou documento ['+cat+']', nome+' · RG '+rg);
+    document.getElementById('docFormOv').classList.remove('open');
+    rerenderAll(); openCard(rg); switchFS('docs');
+    toast('Documento anexado: '+nome);
+  };
+  rd.onerror=function(){ toast('Falha ao ler o arquivo'); };
+  rd.readAsDataURL(DOC_FILE);
+}
+function vencInfo(val){
+  if(!val) return null;
+  var days=Math.floor((new Date(val+'T23:59:59')-nowBRT())/86400000);
+  if(days<0) return {cls:'bad',txt:'VENCIDO',days:days};
+  if(days<=30) return {cls:'warn',txt:'VENCE EM '+days+'d',days:days};
+  return {cls:'ok',txt:'VÁLIDO',days:days};
 }
 
 /* ---------- BLOQUEIO DE CARTÃO ---------- */
@@ -4036,8 +4106,125 @@ function admToggleBloq(){
   if(!CUR) return;
   var rg=CUR.rg, novo=!(OVR[rg]&&OVR[rg].bloq);
   saveOvr(rg,{bloq:novo});
+  logAcao(novo?'Bloqueou cartão':'Desbloqueou cartão', CUR.nome+' (RG '+rg+')');
   openCard(rg); switchFS('seg');
   toast(novo?'Cartão bloqueado':'Cartão desbloqueado');
+}
+
+/* ---------- LOG DE AUDITORIA ---------- */
+function logAcao(a,alvo){
+  if(!FB_DB) return;
+  try{ FB_DB.ref('coeid/log').push({t:Date.now(),adm:ADM||'—',a:a,alvo:alvo||''}); }catch(e){}
+}
+function admLog(){
+  if(!ADM){ admToast(); return; }
+  var ov=document.getElementById('logOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.className='adm-ov'; ov.id='logOv';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.classList.remove('open'); });
+  }
+  ov.innerHTML='<div class="adm-box"><h3>📋 Log de auditoria</h3><div class="sub">Últimas 150 ações registradas · quem, o quê, quando</div><div class="log-list" id="logList">Carregando…</div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'logOv\').classList.remove(\'open\')">Fechar</button></div></div>';
+  ov.classList.add('open');
+  if(!FB_DB){ document.getElementById('logList').innerHTML='<div class="sub">Sem conexão com o banco — log indisponível.</div>'; return; }
+  FB_DB.ref('coeid/log').limitToLast(150).once('value').then(function(snap){
+    var v=snap.val()||{}, ks=Object.keys(v).sort(function(a,b){return v[b].t-v[a].t;});
+    document.getElementById('logList').innerHTML = ks.length ? ks.map(function(k){
+      var e=v[k], dt=new Date(e.t).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'});
+      return '<div class="log-row"><span class="lt">'+dt+' · ADM RG '+esc(e.adm)+'</span>'+
+        '<span class="la">'+esc(e.a)+'</span><span class="lo">'+esc(e.alvo)+'</span></div>';
+    }).join('') : '<div class="sub">Nenhuma ação registrada ainda.</div>';
+  }).catch(function(){ document.getElementById('logList').innerHTML='<div class="sub">Falha ao carregar o log.</div>'; });
+}
+
+/* ---------- VENCIMENTOS ---------- */
+function vencScan(){
+  var out=[];
+  EFETIVO.forEach(function(m){
+    var ds=docsDe(m.rg);
+    Object.keys(ds).forEach(function(id){
+      var vi=vencInfo(ds[id].val);
+      if(vi&&vi.cls!=='ok') out.push({m:m,doc:ds[id],vi:vi});
+    });
+  });
+  out.sort(function(a,b){return a.vi.days-b.vi.days;});
+  return out;
+}
+function updateVencBadge(){
+  var b=document.getElementById('admVencBtn'); if(!b) return;
+  var n=vencScan().length;
+  b.textContent='⚠ Vencimentos'+(n?' ('+n+')':'');
+  b.classList.toggle('venc-badge',n>0);
+}
+function admVencimentos(){
+  if(!ADM){ admToast(); return; }
+  var ov=document.getElementById('vencOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.className='adm-ov'; ov.id='vencOv';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.classList.remove('open'); });
+  }
+  var list=vencScan();
+  ov.innerHTML='<div class="adm-box"><h3>⚠ Controle de vencimentos</h3><div class="sub">Documentos vencidos ou a vencer em até 30 dias</div>'+
+    '<div class="log-list">'+(list.length?list.map(function(x){
+      return '<div class="log-row" style="cursor:pointer" onclick="document.getElementById(\'vencOv\').classList.remove(\'open\');openCard(\''+escq(x.m.rg)+'\');switchFS(\'docs\');">'+
+        '<span class="lt">'+esc(x.m.posto)+' '+esc(x.m.nome)+' · RG '+esc(x.m.rg)+'</span>'+
+        '<span class="la">'+esc(x.doc.n)+(x.doc.cat?' ['+esc(x.doc.cat)+']':'')+'</span>'+
+        '<span class="lo" style="color:'+(x.vi.cls==='bad'?'#c0392b':'#b45309')+';font-weight:800">'+x.vi.txt+' · '+esc(x.doc.val)+'</span></div>';
+    }).join(''):'<div class="sub">✔ Nenhum documento vencido ou próximo do vencimento.</div>')+'</div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'vencOv\').classList.remove(\'open\')">Fechar</button></div></div>';
+  ov.classList.add('open');
+}
+
+/* ---------- RELATÓRIO PDF (via impressão do navegador) ---------- */
+function admRelatorio(){
+  if(!ADM){ admToast(); return; }
+  var d=nowBRT(), dt=d.toLocaleDateString('pt-BR')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var g={}; EFETIVO.forEach(function(m){ (g[m.rep]=g[m.rep]||[]).push(m); });
+  var adidos=EFETIVO.filter(function(m){return m.adido;}).length;
+  var venc=vencScan();
+  var body='';
+  allReps().forEach(function(r){
+    var L=g[r]; if(!L) return;
+    body+='<h2 style="background:'+repColor(r)+'">'+esc(r)+' <small>'+L.length+' militares</small></h2>'+
+      '<table><tr><th>Posto/Grad.</th><th>Nome</th><th>RG</th><th>Função</th><th>Situação</th></tr>'+
+      L.map(function(m){
+        var sit=m.bloq?'BLOQUEADO':(m.situacao||(m.adido?'ADIDO':'ATIVO'));
+        return '<tr><td>'+esc(m.posto)+'</td><td>'+esc(m.nome)+'</td><td>'+esc(m.rg)+'</td><td>'+esc(m.funcao)+'</td><td>'+esc(sit)+'</td></tr>';
+      }).join('')+'</table>';
+  });
+  var vencHtml = venc.length ? '<h2 style="background:#c0392b">DOCUMENTOS VENCIDOS / A VENCER</h2>'+
+    '<table><tr><th>Militar</th><th>RG</th><th>Documento</th><th>Validade</th><th>Status</th></tr>'+
+    venc.map(function(x){return '<tr><td>'+esc(x.m.posto+' '+x.m.nome)+'</td><td>'+esc(x.m.rg)+'</td><td>'+esc(x.doc.n)+'</td><td>'+esc(x.doc.val)+'</td><td>'+x.vi.txt+'</td></tr>';}).join('')+'</table>' : '';
+  var win=window.open('','_blank');
+  if(!win){ toast('Permita pop-ups para gerar o relatório'); return; }
+  win.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório do Efetivo · COE DIGITAL ID</title><style>'+
+    'body{font-family:Segoe UI,Arial,sans-serif;color:#1c2733;margin:28px;font-size:11.5px;}'+
+    '.cab{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0e2240;padding-bottom:10px;margin-bottom:14px;}'+
+    '.cab img{width:58px;height:58px;object-fit:contain;}'+
+    '.cab h1{font-size:17px;color:#0e2240;letter-spacing:.06em;margin:0;}'+
+    '.cab .sb{font-size:10.5px;color:#647082;}'+
+    '.kpis{display:flex;gap:18px;margin-bottom:14px;font-size:11px;}'+
+    '.kpis b{font-size:15px;color:#0e2240;display:block;}'+
+    'h2{color:#fff;padding:5px 10px;border-radius:5px;font-size:12px;margin:14px 0 4px;letter-spacing:.05em;}'+
+    'h2 small{font-weight:400;opacity:.85;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:6px;}'+
+    'th{background:#eef1f5;text-align:left;padding:4px 7px;font-size:10px;letter-spacing:.05em;border:1px solid #d9dee6;}'+
+    'td{padding:3.5px 7px;border:1px solid #e3e8ef;}'+
+    'tr:nth-child(even) td{background:#fafbfd;}'+
+    '.rod{margin-top:16px;padding-top:8px;border-top:1px solid #d9dee6;font-size:9.5px;color:#647082;display:flex;justify-content:space-between;}'+
+    '@media print{h2{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
+    '</style></head><body>'+
+    '<div class="cab"><img src="'+BRASAO+'"><div><h1>RELATÓRIO DO EFETIVO · COE DIGITAL ID</h1>'+
+    '<div class="sb">Comando de Operações Especiais · PMERJ · Gerado em '+dt+' por ADM RG '+esc(ADM)+'</div></div></div>'+
+    '<div class="kpis"><div><b>'+EFETIVO.length+'</b>Efetivo total</div><div><b>'+Object.keys(g).length+'</b>Seções ativas</div>'+
+    '<div><b>'+adidos+'</b>Adidos</div><div><b>'+venc.length+'</b>Docs vencendo/vencidos</div></div>'+
+    body+vencHtml+
+    '<div class="rod"><span>COE DIGITAL ID · documento gerado automaticamente pelo sistema</span><span>Desenvolvido por PM Elomir Gumiero de Moraes</span></div>'+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script></body></html>');
+  win.document.close();
+  logAcao('Gerou relatório do efetivo', EFETIVO.length+' militares');
 }
 
 /* ---------- LINK INDIVIDUAL: ?foto=RG ---------- */
@@ -4066,6 +4253,7 @@ function pmUploadMode(rg){
       compressImage(file,function(data){
         if(!data){ toast('Falha ao processar a imagem'); return; }
         saveOvr(rg,{foto:data});
+        logAcao('Foto enviada (link individual)','RG '+rg);
         document.getElementById('pmPv').innerHTML='<img src="'+data+'">';
         document.getElementById('pmDone').classList.add('on');
       });
