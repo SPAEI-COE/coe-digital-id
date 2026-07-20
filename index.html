@@ -414,6 +414,27 @@
     padding:5px 0 7px;background:#ffffffb0;border-top:1px solid #dde3ea;font-weight:600;
   }
 
+/* ============ DOCUMENTOS DO MILITAR ============ */
+.doclist{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}
+.docrow{display:flex;align-items:center;gap:8px;background:#f4f6fa;border:1px solid #e3e8ef;
+  border-radius:9px;padding:8px 10px;font-size:12.5px;}
+.docrow .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--ink);}
+.docrow .dq{color:var(--mut);font-size:10.5px;flex:none;}
+.docrow button{border:none;border-radius:7px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;flex:none;}
+.docrow .abrir{background:var(--navy);color:#fff;}
+.docrow .del{background:#fbe9e7;color:var(--red);}
+/* gerenciador de pastas */
+.sec-list{display:flex;flex-direction:column;gap:6px;max-height:44vh;overflow:auto;margin:8px 0 14px;}
+.sec-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f7f8fb;border:1px solid #e5e9f0;border-radius:9px;font-size:13px;}
+.sec-item .dot{width:14px;height:14px;border-radius:5px;flex:none;}
+.sec-item .nm{flex:1;font-weight:700;color:var(--ink);}
+.sec-item .tag{font-size:10px;color:var(--mut);letter-spacing:.06em;}
+.sec-item .cnt{font-size:11px;color:var(--mut);}
+.sec-item .rm{border:none;background:#fbe9e7;color:var(--red);border-radius:7px;padding:4px 9px;font-weight:800;cursor:pointer;font-size:11.5px;}
+.sec-new{display:grid;grid-template-columns:1fr 52px auto;gap:8px;align-items:center;}
+.sec-new input[type=color]{width:52px;height:42px;padding:3px;border:1.5px solid #d4dae2;border-radius:9px;background:#fff;cursor:pointer;}
+.sec-new button{border:none;border-radius:9px;background:var(--navy);color:#fff;font-weight:800;padding:0 16px;height:42px;cursor:pointer;}
+
 /* ============ LINK INDIVIDUAL DO MILITAR (upload de foto) ============ */
 #pmUpOv{position:fixed;inset:0;z-index:80;background:linear-gradient(160deg,#0e2240,#16325c);
   display:none;align-items:center;justify-content:center;padding:16px;}
@@ -500,6 +521,7 @@
 </header>
 
 <div id="admBar"><span>🔐 MODO ADMINISTRADOR — edição total liberada</span><span class="sp"></span>
+  <button class="novo" onclick="admSecoes()">🗂 Pastas / Seções</button>
   <button class="novo" onclick="admOpenForm(null)">＋ Novo militar</button>
   <button class="sair" onclick="admLogout()">Sair</button></div>
 
@@ -2913,13 +2935,19 @@ const BRASAO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAQFBQkGC
 var EFETIVO_BASE = [{"id":1,"rg":"60919","posto":"Cel PM","nome":"ALEX BENEVENUTO SANTOS","funcao":"CMT","adido":false,"admin":false},{"id":2,"rg":"67805","posto":"Cel PM","nome":"MARCELO DE CASTRO CORBAGE","funcao":"SUBCMT","adido":false,"admin":false},{"id":3,"rg":"67860","posto":"TEN CEL PM","nome":"MARCELO VAZ DE SOUZA","funcao":"CHEFE P/3","adido":false,"admin":false},{"id":4,"rg":"72648","posto":"TEN CEL PM","nome":"MICHAEL BASTOS SANTANA","funcao":"CHEFE P/3","adido":false,"admin":false},{"id":5,"rg":"80906","posto":"TEN CEL PM","nome":"RENATO ROBERTO LEITE SOARES JR","funcao":"CHEFE P/4","adido":false,"admin":false},{"id":6,"rg":"77552","posto":"Maj PM","nome":"RENATO PEIXOTO MORAES","funcao":"CHEFE P/4","adido":false,"admin":false},{"id":7,"rg":"80976","posto":"Maj PM","nome":"IVO EMÍDIO SANTOS DA SILVA MEZNEROVVICZ","funcao":"CHEFE SEÇÃO PROJETOS","adido":false,"admin":false},{"id":8,"rg":"81665","posto":"Maj PM","nome":"RODRIGO M. REISCH LUNA PAES DA COSTA","funcao":"CHEFE P/2","adido":false,"admin":false},{"id":9,"rg":"85917","posto":"CAP PM","nome":"PAULA MENDES RODINO","funcao":"CHEFE P1","adido":false,"admin":false},{"id":10,"rg":"67172","posto":"1°TEN PM","nome":"NÉLIO LEANDRO DO CARMO","funcao":"CHEFE RUMB/P5/SEC","adido":false,"admin":false},{"id":11,"rg":"84879","posto":"2°TEN PM","nome":"LUIZ FELIPE DE MEDEIROS","funcao":"CHEFE NAOE","adido":false,"admin":false},{"id":12,"rg":"73370","posto":"2°TEN PM","nome":"LEANDRO ARTACHO DA SILVA","funcao":"CHEFE ALMOX/SMT/TES","adido":false,"admin":false},{"id":13,"rg":"92117","posto":"3º SGT PM","nome":"BIANCA FORMIGA DE MATTOS ARAÚJO","funcao":"AJD","adido":false,"admin":false},{"id":14,"rg":"94811","posto":"3º SGT PM","nome":"JADER DE SOUZA MARQUES","funcao":"AJD","adido":false,"admin":false},{"id":15,"rg":"89198","posto":"2º SGT PM","nome":"DIEGO FERREIRA DE OLIVEIRA","funcao":"ALMOXARIFADO","adido":false,"admin":false},{"id":16,"rg":"68116","posto":"SUB TEN PM","nome":"ALESSANDRO DOS SANTOS","funcao":"ALMOXARIFADO","adido":false,"admin":false},{"id":17,"rg":"105026","posto":"CB PM","nome":"THIAGO ROCHA SANTOS","funcao":"BLIN - ALA/A","adido":false,"admin":false},{"id":18,"rg":"107295","posto":"CB PM","nome":"LÁZARO HENRIQUE DE MELO PIRES","funcao":"BLIN - ALA/A","adido":true,"admin":false},{"id":19,"rg":"82250","posto":"1º SGT PM","nome":"FABIANO DE CARVALHO DE C. LELLIS","funcao":"BLIN - ALA/A","adido":false,"admin":false},{"id":20,"rg":"103348","posto":"3º SGT PM","nome":"ADALBERTO QUINTILIANO GUEDES -","funcao":"BLIN - ALA/A","adido":true,"admin":false},{"id":21,"rg":"95717","posto":"3º SGT PM","nome":"JARDEL BASTOS LACERDA","funcao":"BLIN - ALA/B","adido":false,"admin":false},{"id":22,"rg":"103723","posto":"CB PM","nome":"DEIVID DA SILVA INÁCIO","funcao":"BLIN - ALA/B","adido":false,"admin":false},{"id":23,"rg":"103371","posto":"CB PM","nome":"ISRAEL SOARES","funcao":"BLIN - ALA/C","adido":false,"admin":false},{"id":24,"rg":"105893","posto":"CB PM","nome":"FELIPE VERDINO DA SILVA","funcao":"BLIN - ALA/C","adido":false,"admin":false},{"id":25,"rg":"66611","posto":"SUB TEN PM","nome":"SEBASTIÃO DO NASCIMENTO LAUDEANGER","funcao":"BLIN - ALA/C","adido":false,"admin":false},{"id":26,"rg":"93992","posto":"3º SGT PM","nome":"CLEBER DE SOUZA GUIMARAES","funcao":"BLIND - ALA/D","adido":false,"admin":false},{"id":27,"rg":"102529","posto":"3º SGT PM","nome":"LUCIANO BROEDEL MAURICIO","funcao":"BLIND - ALA/D","adido":false,"admin":false},{"id":28,"rg":"103243","posto":"CB PM","nome":"FABIO CARVALHO DA SILVA","funcao":"BLIND - ALA/D","adido":false,"admin":false},{"id":29,"rg":"107836","posto":"CB PM","nome":"JAILSON LUNA DA SILVA","funcao":"BLIND - ALA/D","adido":false,"admin":false},{"id":30,"rg":"73501","posto":"SUB TEN PM","nome":"MARCOS ALVES DA SILVA","funcao":"BOMBA COMB","adido":false,"admin":false},{"id":31,"rg":"102935","posto":"3º SGT PM","nome":"RODOLFO GIMENES BRANDÃO PACHECO","funcao":"BOMBA COMB","adido":true,"admin":false},{"id":32,"rg":"107131","posto":"CB PM","nome":"MARCO ANTONIO NANCI JUNIOR -","funcao":"BOMBA COMB","adido":true,"admin":false},{"id":33,"rg":"73347","posto":"SUB TEN PM","nome":"LUIZ HENRIQUE CORREA DE OLIVEIRA","funcao":"BOMBA COMB","adido":false,"admin":false},{"id":34,"rg":"96387","posto":"3º SGT PM","nome":"LUCIANA MONTANARI","funcao":"CONDUTOR EXP","adido":false,"admin":false},{"id":35,"rg":"91063","posto":"3º SGT PM","nome":"ALBERTO PEREIRA DE ALMEIDA","funcao":"CONDUTOR EXP","adido":false,"admin":false},{"id":36,"rg":"83611","posto":"2º SGT PM","nome":"BRUNO RAFAEL GONÇALVES DA SILVA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":37,"rg":"86496","posto":"2º SGT PM","nome":"ALCEIR DOS SANTOS WAIGERT","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":38,"rg":"86634","posto":"2º SGT PM","nome":"PETER NASCIMENTO DE SOUZA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":39,"rg":"93380","posto":"3º SGT PM","nome":"ANDRE HENRIQUE SILVA DE OLIVEIRA","funcao":"DEMOL - ALA /B","adido":false,"admin":false},{"id":40,"rg":"93453","posto":"3º SGT PM","nome":"CARLOS ALEXANDRE PESSOA DA CUNHA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":41,"rg":"95977","posto":"3º SGT PM","nome":"LUIZ ALBERTO DOS SANTOS","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":42,"rg":"97435","posto":"3º SGT PM","nome":"ANDRE DE SOUSA TAVARES","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":43,"rg":"105369","posto":"CB PM","nome":"ALLAN SANTOS DE SOUZA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":44,"rg":"106946","posto":"CB PM","nome":"THIAGO DOS SANTOS DE OLIVEIRA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":45,"rg":"107046","posto":"CB PM","nome":"FERNANDO GONÇALVES DE OLIVEIRA","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":46,"rg":"107404","posto":"CB PM","nome":"RODRIGO SILVA GUIMARAES","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":47,"rg":"107492","posto":"CB PM","nome":"DIEGO GALVÃO LOPES","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":48,"rg":"91872","posto":"CB PM","nome":"MARCELO MOURA DE JESUS","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":49,"rg":"110184","posto":"SD PM","nome":"EDES MURI NETO","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":50,"rg":"110336","posto":"SD PM","nome":"ALDECIR DOS SANTOS WAIGERT","funcao":"DEM - ALA / B","adido":false,"admin":false},{"id":51,"rg":"92370","posto":"3º SGT PM","nome":"LEANDRO BONFIM BORBA","funcao":"DEM-  ALA/ A","adido":false,"admin":false},{"id":52,"rg":"108684","posto":"CB PM","nome":"JOSE RICARDO SILVA DE OLIVEIRA -","funcao":"DEM-  ALA/ A","adido":true,"admin":false},{"id":53,"rg":"60987","posto":"SUB TEN PM","nome":"RENATO DE OLIVEIRA IGNEZ","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":54,"rg":"82995","posto":"2º SGT PM","nome":"BRUNO NOGUEIRA CORRÊA","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":55,"rg":"86225","posto":"2º SGT PM","nome":"OSEIAS DA SILVA LIMA JUNIOR","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":56,"rg":"86609","posto":"2º SGT PM","nome":"MARCOS LUIZ PAIVA VIEIRA","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":57,"rg":"104762","posto":"CB PM","nome":"VINICIUS DA SILVA DE PAULA","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":58,"rg":"107542","posto":"CB PM","nome":"JACKSON JOSÉ DE OLIVEIRA SOARES","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":59,"rg":"108643","posto":"CB PM","nome":"CHARLES DA SILVA PRADO","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":60,"rg":"108825","posto":"CB PM","nome":"FELIPE DE SOUZA DA SILVA","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":61,"rg":"70312","posto":"SUB TEN PM","nome":"JORGE ANTONIO OLIVEIRA DE ARAUJO","funcao":"DEM- ALA / A","adido":true,"admin":false},{"id":62,"rg":"74179","posto":"1º SGT PM","nome":"AUGUSTO PIRES LOPES","funcao":"DEM- ALA / A","adido":true,"admin":false},{"id":63,"rg":"87567","posto":"2º SGT PM","nome":"DANIEL FRANÇA SANT'ANA FILHO","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":64,"rg":"101676","posto":"3º SGT PM","nome":"JOÃO BRUNO DA SILVA BRANDÃO","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":65,"rg":"109160","posto":"CB PM","nome":"MARCELO CARLOS DA SILVA M. BORBA","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":66,"rg":"102304","posto":"3º SGT PM","nome":"WALDEMIRO FERREIRA DE S. CARVALHAES","funcao":"DEM- ALA / A","adido":false,"admin":false},{"id":67,"rg":"104124","posto":"CB PM","nome":"FABIO SAMUEL -","funcao":"DEM- ALA / A","adido":true,"admin":false},{"id":68,"rg":"78270","posto":"SUB TEN PM","nome":"ANDRÉ LUIZ BRAZ ABDELHAY","funcao":"FAXINA","adido":false,"admin":false},{"id":69,"rg":"71516","posto":"SUB TEN PM","nome":"PAULO CESAR TAMAIO BRITO","funcao":"FAXINA","adido":false,"admin":false},{"id":70,"rg":"73290","posto":"SUB TEN PM","nome":"MARCIO ANTONIO MADUREIRA DE ARAUJO","funcao":"FAXINA","adido":false,"admin":false},{"id":71,"rg":"62842","posto":"SUB TEN PM","nome":"PAULO EDUARDO FRADE GOMES","funcao":"FISCAL DIA","adido":false,"admin":false},{"id":72,"rg":"64610","posto":"SUB TEN PM","nome":"LEONARDO RODRIGUES DA SILVA","funcao":"FISCAL DIA","adido":false,"admin":false},{"id":73,"rg":"73279","posto":"SUB TEN PM","nome":"MAURICIO HENRIQUE DA SILVA FILHO","funcao":"FISCAL DIA","adido":false,"admin":false},{"id":74,"rg":"67917","posto":"SUB TEN PM","nome":"ROBSON FRANCISCO DOS SANTOS","funcao":"FISCAL DIA","adido":true,"admin":false},{"id":75,"rg":"89231","posto":"2º SGT PM","nome":"FABRICIO DA SILVA TOLEDO","funcao":"MOT CMT","adido":false,"admin":false},{"id":76,"rg":"98479","posto":"3º SGT PM","nome":"MATHEUS RODRIGUES FERREIRA LESSA","funcao":"MOT CMT","adido":false,"admin":false},{"id":77,"rg":"76537","posto":"SUB TEN PM","nome":"RONALDO SILVA AZEVEDO","funcao":"NAOE / ADM","adido":false,"admin":false},{"id":78,"rg":"68262","posto":"SUB TEN PM","nome":"ALEXANDRE DIAS BREVES \"B\"","funcao":"NAOE / ADM","adido":true,"admin":false},{"id":79,"rg":"70515","posto":"SUB TEN PM","nome":"MARCELO SILVA DOS SANTOS","funcao":"NAOE / ADM","adido":true,"admin":false},{"id":80,"rg":"99940","posto":"3º SGT PM","nome":"JULIO CESAR RODRIGUES SANTOS -","funcao":"NAOE / ADM","adido":true,"admin":false},{"id":81,"rg":"62178","posto":"SUB TEN PM","nome":"FABIO ALEXANDRE DE SOUZA DA SILVA-","funcao":"OBRA -ALA/A","adido":true,"admin":false},{"id":82,"rg":"69171","posto":"SUB TEN PM","nome":"EDSON DA SILVA OLIVEIRA","funcao":"OBRA -ALA/A","adido":false,"admin":false},{"id":83,"rg":"70531","posto":"SUB TEN PM","nome":"RICARDO DE SOUZA PINNA","funcao":"OBRA -ALA/A","adido":false,"admin":false},{"id":84,"rg":"83295","posto":"2º SGT PM","nome":"LEONARDO ROSA FERREIRA","funcao":"OBRA -ALA/A","adido":false,"admin":false},{"id":85,"rg":"101868","posto":"3º SGT PM","nome":"MARCELO DUARTE VICENTE","funcao":"OBRA -ALA/A","adido":false,"admin":false},{"id":86,"rg":"93808","posto":"3º SGT PM","nome":"THIAGO PEREIRA MOZER","funcao":"OBRA -ALA/A","adido":false,"admin":false},{"id":87,"rg":"82097","posto":"1º SGT PM","nome":"PHABLU FERREIRA ANTONIO","funcao":"OBRA -ALA/B","adido":true,"admin":false},{"id":88,"rg":"88651","posto":"2º SGT PM","nome":"RÔMULO MISAEL PASCH DE SOUZA","funcao":"OBRA -ALA/B","adido":true,"admin":false},{"id":89,"rg":"94388","posto":"3º SGT PM","nome":"VITOR PEIXOTO DE CARVALHO","funcao":"OBRA -ALA/B","adido":false,"admin":false},{"id":90,"rg":"56203","posto":"SUB TEN PM","nome":"CARLOS LUIS NOVAIS DA SILVA","funcao":"OBRA -ALA/B","adido":false,"admin":false},{"id":91,"rg":"102942","posto":"3º SGT PM","nome":"CARLOS ALESSANDRO DE LIMA","funcao":"OBRA -ALA/B","adido":false,"admin":false},{"id":92,"rg":"83548","posto":"2º SGT PM","nome":"FÁBIO DOS SANTOS PINHEIRO","funcao":"OBRA -ALA/B","adido":true,"admin":false},{"id":93,"rg":"93766","posto":"3º SGT PM","nome":"DIEGO NOGUEIRA CROSS","funcao":"OBRA -ALA/B","adido":true,"admin":false},{"id":94,"rg":"77690","posto":"SUB TEN PM","nome":"RODRIGO BATISTA DE SOUZA","funcao":"OBRA -ALA/B","adido":true,"admin":false},{"id":95,"rg":"66945","posto":"SUB TEN PM","nome":"MARCOS PAULO GONÇALVES DE ARAÚJO","funcao":"P1","adido":false,"admin":false},{"id":96,"rg":"73502","posto":"SUB TEN PM","nome":"ALAN OLIVEIRA DOS SANTOS","funcao":"P1","adido":false,"admin":false},{"id":97,"rg":"90949","posto":"3º SGT PM","nome":"LORAINE DE OLIVEIRA GOMES","funcao":"P1","adido":false,"admin":false},{"id":98,"rg":"98185","posto":"3º SGT PM","nome":"THIAGO REZENDE DE FARIA","funcao":"P1","adido":false,"admin":false},{"id":99,"rg":"91018","posto":"3º SGT PM","nome":"LUANA GOMES DA CRUZ","funcao":"P1 BOLETINISTA","adido":false,"admin":false},{"id":100,"rg":"96492","posto":"3º SGT PM","nome":"ELLEN VIEIRA MOURA","funcao":"P1 BOLETINISTA","adido":false,"admin":false},{"id":101,"rg":"80590","posto":"1º SGT PM","nome":"DEBORA FARIAS SUBTIL DE LIMA","funcao":"P1 CONFERENTE","adido":false,"admin":false},{"id":102,"rg":"69853","posto":"SUB TEN PM","nome":"CESAR AUGUSTO DE MATTOS","funcao":"P2","adido":false,"admin":false},{"id":103,"rg":"77094","posto":"SUB TEN PM","nome":"SAINT'CLAIR LOPES DA SILVA","funcao":"P2","adido":false,"admin":false},{"id":104,"rg":"77429","posto":"1º SGT PM","nome":"LEANDRO CAMILO DA SILVA","funcao":"P2","adido":false,"admin":false},{"id":105,"rg":"84303","posto":"2º SGT PM","nome":"VIVIAN RAMOS SILVEIRA","funcao":"P2","adido":false,"admin":false},{"id":106,"rg":"89118","posto":"2º SGT PM","nome":"SABRINA SIMOES BRAGA SILVA PALMEIRA","funcao":"P2","adido":false,"admin":false},{"id":107,"rg":"89972","posto":"3º SGT PM","nome":"LEANDRO SOARES DOS SANTOS","funcao":"P2","adido":false,"admin":false},{"id":108,"rg":"91605","posto":"3º SGT PM","nome":"RODRIGO MORAES MACEDO","funcao":"P2","adido":false,"admin":false},{"id":109,"rg":"99974","posto":"3º SGT PM","nome":"LEONARDO NUNES GARCIA RODRIGUES","funcao":"P2","adido":false,"admin":false},{"id":110,"rg":"89935","posto":"3º SGT PM","nome":"DANIELE COELHO VIANA","funcao":"P3","adido":false,"admin":false},{"id":111,"rg":"99188","posto":"3º SGT PM","nome":"MAURILLO BARROS DE ARAUJO NETO","funcao":"P3","adido":false,"admin":false},{"id":112,"rg":"105750","posto":"CB PM","nome":"ADRIANA SILVA DE ALMEIDA","funcao":"P3","adido":false,"admin":false},{"id":113,"rg":"86264","posto":"2º SGT PM","nome":"WILLIAN MARIANO DE SANTANA -","funcao":"P3","adido":true,"admin":false},{"id":114,"rg":"70552","posto":"SUB TEN PM","nome":"FRANCISCO EUGENIO MANTUANO","funcao":"P3","adido":true,"admin":false},{"id":115,"rg":"90453","posto":"3º SGT PM","nome":"GLADSTON MEDEIROS HOLANDA DE SOUSA","funcao":"P4","adido":false,"admin":false},{"id":116,"rg":"90606","posto":"3º SGT PM","nome":"BRUNO CANDIDO DE SOUZA","funcao":"P4","adido":false,"admin":false},{"id":117,"rg":"109125","posto":"CB PM","nome":"MARCUS VINICIUS GOMES SAMPAIO","funcao":"P4","adido":false,"admin":false},{"id":118,"rg":"83635","posto":"2º SGT PM","nome":"CARLOS HENRIQUE M. HAUTEQUEST JUNIOR","funcao":"P4 TESORARIA","adido":false,"admin":false},{"id":119,"rg":"90942","posto":"3º SGT PM","nome":"TATIANA ARAÚJO RAMOS","funcao":"P4 TESORARIA","adido":false,"admin":false},{"id":120,"rg":"83192","posto":"2º SGT PM","nome":"FABIO DE BARROS DIAS","funcao":"P5","adido":false,"admin":false},{"id":121,"rg":"90585","posto":"3º SGT PM","nome":"ALMIR COSTA","funcao":"PROJETOS","adido":false,"admin":false},{"id":122,"rg":"81440","posto":"1º SGT PM","nome":"SERGIO ALEIXO DE LIMA","funcao":"PROJETOS","adido":false,"admin":true},{"id":123,"rg":"86430","posto":"2º SGT PM","nome":"THIAGO LOPES MAGALHAES DOS REIS","funcao":"PROJETOS","adido":false,"admin":false},{"id":124,"rg":"82061","posto":"2º SGT PM","nome":"ELOMIR GUMIERO DE MORAES","funcao":"PROJETOS","adido":false,"admin":true},{"id":125,"rg":"92096","posto":"3º SGT PM","nome":"VANESSA MATOS DE AGUIAR","funcao":"PROJETOS","adido":false,"admin":false},{"id":126,"rg":"93134","posto":"3º SGT PM","nome":"MICHELINE GOMES DA SILVA","funcao":"PROJETOS","adido":false,"admin":false},{"id":127,"rg":"65339","posto":"SUB TEN PM","nome":"\"VALDECI GOMES DIAS \"\"B\"\"\"","funcao":"PROJETOS","adido":true,"admin":false},{"id":128,"rg":"102336","posto":"3º SGT PM","nome":"ANDIELO COSTA DE MESQUITA \"APTO B\"","funcao":"PROJETOS","adido":true,"admin":false},{"id":129,"rg":"91206","posto":"3º SGT PM","nome":"MARCELA DA SILVA GOMES","funcao":"PROJETOS","adido":true,"admin":false},{"id":130,"rg":"60520","posto":"SUB TEN PM","nome":"MIGUEL ANDERSON ALECRIM PINHEIRO","funcao":"RUMB","adido":false,"admin":false},{"id":131,"rg":"64007","posto":"SUB TEN PM","nome":"JORGE LUIZ DE FRANÇA","funcao":"RUMB","adido":false,"admin":false},{"id":132,"rg":"80284","posto":"1º SGT PM","nome":"ALEXANDRE CORREIA MARTINS","funcao":"RUMB","adido":false,"admin":false},{"id":133,"rg":"73219","posto":"SUB TEN PM","nome":"ALLAN SOARES ASSEN  -","funcao":"RUMB","adido":true,"admin":false},{"id":134,"rg":"101316","posto":"3º SGT PM","nome":"DIEGO BRITO DOS SANTOS","funcao":"RUMB","adido":true,"admin":false},{"id":135,"rg":"72902","posto":"SUB TEN PM","nome":"OZEAS LUCAS RODRIGUES","funcao":"SECRETARIA","adido":false,"admin":false},{"id":136,"rg":"91059","posto":"3º SGT PM","nome":"ANGÉLICA RIBEIRO MOREIRA","funcao":"SECRETARIA","adido":false,"admin":false},{"id":137,"rg":"91254","posto":"3º SGT PM","nome":"VINICIUS MOSCA ROLIM SALES","funcao":"SECRETARIA","adido":false,"admin":false},{"id":138,"rg":"64551","posto":"SUB TEN PM","nome":"VINICÍUS VICTOR DA SILVA","funcao":"SEM FUNÇÃO","adido":false,"admin":false},{"id":139,"rg":"101929","posto":"3º SGT PM","nome":"PAULO HENRIQUE CABREIRA DA SILVA","funcao":"SEM FUNÇÃO","adido":false,"admin":false},{"id":140,"rg":"103184","posto":"CB PM","nome":"ALMIR CARDOSO DA SILVA JUNIOR","funcao":"SEM FUNÇÃO","adido":false,"admin":false},{"id":141,"rg":"44695","posto":"SUB TEN PM","nome":"ANTONIO GONÇALVES DA ROCHA FILHO","funcao":"TELEMÁTICA","adido":false,"admin":false},{"id":142,"rg":"102442","posto":"CB PM","nome":"JOSE CARNEIRO DE ARAUJO JUNIOR","funcao":"TELEMÁTICA","adido":false,"admin":false}];
 
 /* ---------- Repartições (regra idêntica ao P1 DIGITAL) ---------- */
-const REPARTICOES = ['CMT','SUBCMT','P1','P2','P3','P4','P5','AJD','PROJETOS','DEMOLIÇÃO','BLINDADOS','OBRAS','RUMB','NAOE','ALMOXARIFADO','APOIO/DIVERSOS'];
+var REPARTICOES_BASE = ['CMT','SUBCMT','P1','P2','P3','P4','P5','AJD','PROJETOS','DEMOLIÇÃO','BLINDADOS','OBRAS','RUMB','NAOE','ALMOXARIFADO','APOIO/DIVERSOS'];
 const REP_META = {
   'CMT':'#1B3A6B','SUBCMT':'#274C86','P1':'#0F2D5F','P2':'#155E75','P3':'#166534',
   'P4':'#854D0E','P5':'#6B21A8','AJD':'#0E7490','PROJETOS':'#7C3AED','DEMOLIÇÃO':'#B45309',
   'BLINDADOS':'#334155','OBRAS':'#9A3412','RUMB':'#0369A1','NAOE':'#1E40AF',
   'ALMOXARIFADO':'#4D7C0F','APOIO/DIVERSOS':'#64748B'
 };
+var SECOES_CUSTOM={};              /* pastas criadas pelo ADM: {nome:{cor}} */
+function allReps(){
+  var extras=Object.keys(SECOES_CUSTOM).filter(function(n){return REPARTICOES_BASE.indexOf(n)<0;}).sort();
+  return REPARTICOES_BASE.slice(0,-1).concat(extras).concat(['APOIO/DIVERSOS']);
+}
+function repColor(rep){ return REP_META[rep]||(SECOES_CUSTOM[rep]&&SECOES_CUSTOM[rep].cor)||'#64748B'; }
 function _normFunc(f){
   return (f||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase().replace(/[\/\-.]/g,' ').replace(/\s+/g,' ').trim();
@@ -3035,7 +3063,7 @@ function toggleFS(){
 function renderChips(){
   var counts={}; EFETIVO.forEach(function(m){counts[m.rep]=(counts[m.rep]||0)+1;});
   var html='<div class="chip'+(state.rep==='TODOS'?' on':'')+'" data-rep="TODOS">TODOS<small>'+EFETIVO.length+'</small></div>';
-  REPARTICOES.forEach(function(r){
+  allReps().forEach(function(r){
     if(!counts[r]) return;
     html+='<div class="chip'+(state.rep===r?' on':'')+'" data-rep="'+esc(r)+'">'+esc(r)+'<small>'+counts[r]+'</small></div>';
   });
@@ -3052,7 +3080,7 @@ function buildSugg(q){
   var box=document.getElementById('sugg');
   if(q.length<2){ hideSugg(); return; }
   var qn=_normFunc(q).toLowerCase();
-  var secs=REPARTICOES.filter(function(r){
+  var secs=allReps().filter(function(r){
     return _normFunc(r).toLowerCase().indexOf(qn)>=0 && EFETIVO.some(function(m){return m.rep===r;});
   }).slice(0,3);
   var mils=EFETIVO.filter(function(m){
@@ -3066,7 +3094,7 @@ function buildSugg(q){
       var n=EFETIVO.filter(function(m){return m.rep===r;}).length;
       suggItems.push({t:'sec',v:r});
       html+='<div class="sg-it" data-i="'+(suggItems.length-1)+'">'+
-        '<span class="sg-dot" style="background:'+(REP_META[r]||'#64748B')+'"></span>'+
+        '<span class="sg-dot" style="background:'+repColor(r)+'"></span>'+
         '<div class="sg-tx"><b>'+esc(r)+'</b><span>'+n+' militares · abrir pasta</span></div>'+
         '<span class="sg-go">PASTA ›</span></div>';
     });
@@ -3175,9 +3203,9 @@ function syncBars(){
 
 var FOLDER_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>';
 function folderHTML(rep, list){
-  var cor=REP_META[rep]||'#64748B';
+  var cor=repColor(rep);
   var prev=list.slice(0,4).map(function(m){
-    var f=FOTOS[m.rg];
+    var f=fotoDe(m.rg);
     return '<div class="fd-av">'+(f?'<img src="'+f+'" alt="">':esc(initials(m.nome)))+'</div>';
   }).join('');
   if(list.length>4) prev+='<div class="fd-av more">+'+(list.length-4)+'</div>';
@@ -3204,7 +3232,7 @@ function renderFolders(){
   grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
   var g={}; EFETIVO.forEach(function(m){ (g[m.rep]=g[m.rep]||[]).push(m); });
   var html='';
-  REPARTICOES.forEach(function(r){ if(g[r]) html+=folderHTML(r, g[r]); });
+  allReps().forEach(function(r){ if(g[r]) html+=folderHTML(r, g[r]); });
   grid.innerHTML=html;
   grid.querySelectorAll('.fd').forEach(function(f){
     f.onclick=function(){ openPasta(f.getAttribute('data-rep')); };
@@ -3226,8 +3254,8 @@ function miniCardHTML(m){
   var fotoHTML = foto
     ? '<img src="'+foto+'" alt="">'
     : '<span class="mc-init"></span><div class="mc-fp">Foto pendente</div>';
-  var sitTxt = m.situacao || (m.adido ? 'ADIDO' : 'ATIVO');
-  var sit = '<span class="mc-sit'+((m.adido||m.situacao)?' adido':'')+'">'+esc(sitTxt)+'</span>';
+  var sitTxt = m.bloq ? 'BLOQUEADO' : (m.situacao || (m.adido ? 'ADIDO' : 'ATIVO'));
+  var sit = '<span class="mc-sit'+((m.adido||m.situacao||m.bloq)?' adido':'')+'">'+esc(sitTxt)+'</span>';
   return ''+
   '<div class="mc-outer"><div class="mc" data-rg="'+esc(m.rg)+'">'+
     '<div class="mc-head">'+
@@ -3237,7 +3265,7 @@ function miniCardHTML(m){
     '<div class="mc-name"></div>'+
     '<div class="mc-photo-zone"><div class="mc-photo">'+fotoHTML+'</div></div>'+
     '<div class="mc-func"></div>'+
-    '<div class="mc-rep"><span style="background:'+(REP_META[m.rep]||'#64748B')+'"></span></div>'+
+    '<div class="mc-rep"><span style="background:'+repColor(m.rep)+'"></span></div>'+
     '<div class="mc-strip">'+
       '<div><span class="lb">RG PM</span><span class="vl mcs-rg"></span></div>'+
       '<div class="r"><span class="lb">Repartição</span><span class="vl mcs-rep"></span></div>'+
@@ -3378,8 +3406,8 @@ function screenHTML(m){
   var fotoInner = foto
     ? '<img src="'+foto+'" alt="">'
     : '<span class="pf-init">'+esc(initials(m.nome))+'</span><div class="pf-tag">Foto pendente</div>';
-  var sitTxt = m.situacao || (m.adido ? 'ADIDO' : 'ATIVO');
-  var sitBar = '<div class="fs-sit"><div class="bar'+((m.adido||m.situacao)?' adido':'')+'"></div><div><span class="lb">Situação</span><span class="vl">'+esc(sitTxt)+'</span></div></div>';
+  var sitTxt = m.bloq ? 'CARTÃO BLOQUEADO' : (m.situacao || (m.adido ? 'ADIDO' : 'ATIVO'));
+  var sitBar = '<div class="fs-sit"><div class="bar'+((m.adido||m.situacao||m.bloq)?' adido':'')+'"></div><div><span class="lb">Situação</span><span class="vl">'+esc(sitTxt)+'</span></div></div>';
 
   return ''+
   /* ===== CARTÃO ===== */
@@ -3459,8 +3487,8 @@ function screenHTML(m){
   /* ===== DOCS ===== */
   '<div class="fscr" data-s="docs"><div class="sub-card">'+
     '<div class="sc-title">Documentação</div>'+
-    '<div class="doc-empty">Nenhum documento anexado até o momento.<br>Os PDFs deste militar serão inseridos pelo administrador.</div>'+
-    '<button class="btn ghost" onclick="admToast()">Anexar documento (ADM)</button>'+
+    docsListHTML(m)+
+    '<button class="btn ghost" onclick="admAddDoc()">Anexar documento (ADM)</button>'+
   '</div></div>'+
 
   /* ===== HISTÓRICO ===== */
@@ -3481,7 +3509,7 @@ function screenHTML(m){
     restrRow('Registro de armamento')+
     '<div class="lgpd">Informações de armamento não são exibidas na tela Cartão nem em painéis de TV, por norma de segurança institucional.</div>'+
     '<button class="btn navy" onclick="openQR()">Exibir QR de verificação</button>'+
-    '<button class="btn ghost" onclick="admToast()">Bloquear cartão (ADM)</button>'+
+    '<button class="btn ghost" onclick="admToggleBloq()">'+(m.bloq?'Desbloquear cartão (ADM)':'Bloquear cartão (ADM)')+'</button>'+
   '</div></div>';
 }
 
@@ -3685,7 +3713,7 @@ var ADMIN_FALLBACK={'82061':true,'81440':true};
 var POSTOS=['Cel PM','TEN CEL PM','Maj PM','CAP PM','1°TEN PM','2°TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'];
 var SITUACOES=['','APTO A','APTO B','APTO C','FÉRIAS','LICENÇA','DISPENSA','BAIXADO','CURSO','MISSÃO'];
 
-function fotoDe(rg){ var o=OVR[rg]; return (o&&o.foto)||FOTOS[rg]||null; }
+function fotoDe(rg){ var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null; return (o&&o.foto)||FOTOS[rg]||null; }
 
 /* ---------- Firebase ---------- */
 try{
@@ -3712,12 +3740,17 @@ function rebuildEfetivo(){
       if(o.del){ list=list.filter(function(m){return m.rg!==rg;}); delete byRg[rg]; return; }
       ['nome','posto','funcao','situacao'].forEach(function(k){ if(o[k]!=null&&o[k]!=='') byRg[rg][k]=o[k]; });
       if(typeof o.adido==='boolean') byRg[rg].adido=o.adido;
+      if(o.bloq) byRg[rg].bloq=true;
     } else if(o.novo && !o.del){
       list.push({id:1000+list.length, rg:rg, nome:o.nome||'—', posto:o.posto||'SD PM',
         funcao:o.funcao||'SEM FUNÇÃO', adido:!!o.adido, situacao:o.situacao||'', admin:false});
     }
   });
-  list.forEach(function(m){ m.rep=reparticaoDe(m.funcao); });
+  list.forEach(function(m){
+    var o=OVR[m.rg];
+    m.rep=(o&&o.rep)?o.rep:reparticaoDe(m.funcao);   /* pasta manual do ADM tem prioridade */
+    if(o&&o.bloq) m.bloq=true;
+  });
   EFETIVO=list;
 }
 function rerenderAll(){
@@ -3837,6 +3870,10 @@ function admOpenForm(rg){
   var selP=document.getElementById('afPosto');
   selP.innerHTML=POSTOS.map(function(p){return '<option'+((m&&m.posto===p)?' selected':'')+'>'+p+'</option>';}).join('');
   document.getElementById('afFunc').value=m?m.funcao:'';
+  var selR=document.getElementById('afRep');
+  var curRep=(rg&&OVR[rg]&&OVR[rg].rep)||'';
+  selR.innerHTML='<option value="">— automática pela função —</option>'+
+    allReps().map(function(s){return '<option value="'+esc(s)+'"'+(curRep===s?' selected':'')+'>'+esc(s)+'</option>';}).join('');
   var selS=document.getElementById('afSit');
   selS.innerHTML=SITUACOES.map(function(s){return '<option value="'+s+'"'+((m&&(m.situacao||'')===s)?' selected':'')+'>'+(s||'— padrão (Ativo/Adido) —')+'</option>';}).join('');
   document.getElementById('afAdido').checked=!!(m&&m.adido);
@@ -3871,7 +3908,8 @@ function admFormSave(){
   if(!FORM_RG && EFETIVO.some(function(m){return m.rg===rg;})){
     err.textContent='Já existe militar com este RG.'; err.classList.add('on'); return;
   }
-  var patch={nome:nome,posto:posto,funcao:func||'SEM FUNÇÃO',situacao:sit,adido:adido};
+  var repSel=document.getElementById('afRep').value;
+  var patch={nome:nome,posto:posto,funcao:func||'SEM FUNÇÃO',situacao:sit,adido:adido,rep:repSel||null};
   if(!FORM_RG) patch.novo=true;
   if(FORM_FOTO) patch.foto=FORM_FOTO;
   saveOvr(rg,patch);
@@ -3885,6 +3923,121 @@ function admDelete(rg){
   var base=EFETIVO_BASE.some(function(x){return x.rg===rg;});
   if(base) saveOvr(rg,{del:true}); else removeOvr(rg);
   toast('Militar removido do painel');
+}
+
+/* ---------- SEÇÕES / PASTAS DINÂMICAS ---------- */
+try{ SECOES_CUSTOM=JSON.parse(localStorage.getItem('coeid_secoes_v1')||'{}'); }catch(e){ SECOES_CUSTOM={}; }
+function secLS(){ try{ localStorage.setItem('coeid_secoes_v1',JSON.stringify(SECOES_CUSTOM)); }catch(e){} }
+if(FB_DB){
+  FB_DB.ref('coeid/secoes').on('value',function(snap){
+    SECOES_CUSTOM=snap.val()||{}; secLS(); rerenderAll();
+    if(document.getElementById('secOv')&&document.getElementById('secOv').classList.contains('open')) admSecoes();
+  });
+}
+function admSecoes(){
+  if(!ADM){ admToast(); return; }
+  var ov=document.getElementById('secOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.className='adm-ov'; ov.id='secOv';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.classList.remove('open'); });
+  }
+  var cnt={}; EFETIVO.forEach(function(m){ cnt[m.rep]=(cnt[m.rep]||0)+1; });
+  var rows=allReps().map(function(s){
+    var fixa=REPARTICOES_BASE.indexOf(s)>=0;
+    return '<div class="sec-item"><span class="dot" style="background:'+repColor(s)+'"></span>'+
+      '<span class="nm">'+esc(s)+'</span><span class="cnt">'+(cnt[s]||0)+' militares</span>'+
+      (fixa?'<span class="tag">FIXA</span>':'<button class="rm" onclick="admSecDel(\''+escq(s)+'\')">Excluir</button>')+
+      '</div>';
+  }).join('');
+  ov.innerHTML='<div class="adm-box"><h3>🗂 Pastas / Seções</h3>'+
+    '<div class="sub">As fixas seguem a estrutura do COE; as novas são suas — os militares são movidos pelo campo "Pasta/Seção" do cadastro.</div>'+
+    '<div class="sec-list">'+rows+'</div>'+
+    '<label>Nova pasta</label><div class="sec-new">'+
+    '<input id="secNm" placeholder="ex.: CURSO CAT, K9, MISSÃO XYZ" autocomplete="off">'+
+    '<input type="color" id="secCor" value="#7C3AED">'+
+    '<button onclick="admSecAdd()">Criar</button></div>'+
+    '<div class="err" id="secErr"></div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'secOv\').classList.remove(\'open\')">Fechar</button></div></div>';
+  ov.classList.add('open');
+}
+function admSecAdd(){
+  var nm=document.getElementById('secNm').value.trim().toUpperCase();
+  var cor=document.getElementById('secCor').value;
+  var err=document.getElementById('secErr');
+  if(!nm){ err.textContent='Digite o nome da pasta.'; err.classList.add('on'); return; }
+  if(allReps().indexOf(nm)>=0){ err.textContent='Já existe pasta com esse nome.'; err.classList.add('on'); return; }
+  SECOES_CUSTOM[nm]={cor:cor}; secLS();
+  if(FB_DB) FB_DB.ref('coeid/secoes/'+nm.replace(/[.#$\[\]\/]/g,'_')).set({cor:cor}).catch(function(){});
+  rerenderAll(); admSecoes();
+  toast('Pasta "'+nm+'" criada — mova militares pelo cadastro deles');
+}
+function admSecDel(nm){
+  if(!window.confirm('Excluir a pasta "'+nm+'"? Os militares dela voltam para a pasta automática da função.')) return;
+  delete SECOES_CUSTOM[nm]; secLS();
+  if(FB_DB) FB_DB.ref('coeid/secoes/'+nm.replace(/[.#$\[\]\/]/g,'_')).remove().catch(function(){});
+  Object.keys(OVR).forEach(function(rg){
+    if(OVR[rg]&&OVR[rg].rep===nm) saveOvr(rg,{rep:null});
+  });
+  rerenderAll(); admSecoes();
+  toast('Pasta excluída');
+}
+
+/* ---------- DOCUMENTOS DO MILITAR ---------- */
+function docsDe(rg){ var o=OVR[rg]; return (o&&o.docs)?o.docs:{}; }
+function docsListHTML(m){
+  var ds=docsDe(m.rg), ks=Object.keys(ds).sort(function(a,b){return (ds[b].q||0)-(ds[a].q||0);});
+  if(!ks.length) return '<div class="doc-empty">Nenhum documento anexado até o momento.<br>Os PDFs deste militar serão inseridos pelo administrador.</div>';
+  return '<div class="doclist">'+ks.map(function(id){
+    var d=ds[id], q=d.q?new Date(d.q).toLocaleDateString('pt-BR'):'';
+    return '<div class="docrow"><span class="dn">📄 '+esc(d.n)+'</span><span class="dq">'+q+'</span>'+
+      '<button class="abrir" onclick="docOpen(\''+escq(m.rg)+'\',\''+escq(id)+'\')">Abrir</button>'+
+      (ADM?'<button class="del" onclick="docDel(\''+escq(m.rg)+'\',\''+escq(id)+'\')">🗑</button>':'')+
+      '</div>';
+  }).join('')+'</div>';
+}
+function docOpen(rg,id){
+  var d=docsDe(rg)[id]; if(!d) return;
+  var a=document.createElement('a'); a.href=d.d; a.download=d.n; a.click();
+}
+function docDel(rg,id){
+  if(!ADM){ admToast(); return; }
+  if(!window.confirm('Excluir o documento?')) return;
+  if(OVR[rg]&&OVR[rg].docs) delete OVR[rg].docs[id];
+  ovrLS(); if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).remove().catch(function(){});
+  rerenderAll(); if(CUR) { openCard(rg); switchFS('docs'); }
+}
+function admAddDoc(){
+  if(!ADM){ admToast(); return; }
+  if(!CUR) return;
+  var inp=document.createElement('input'); inp.type='file';
+  inp.accept='application/pdf,image/*';
+  inp.onchange=function(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    if(f.size>3*1024*1024){ toast('Arquivo acima de 3 MB — reduza o PDF antes de anexar'); return; }
+    var rg=CUR.rg, rd=new FileReader();
+    rd.onload=function(){
+      var id='d'+Date.now();
+      var doc={n:f.name,t:f.type,d:rd.result,q:Date.now()};
+      var o=OVR[rg]||{}; o.docs=o.docs||{}; o.docs[id]=doc; OVR[rg]=o; ovrLS();
+      if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).set(doc).catch(function(){ toast('Sem conexão — salvo apenas neste dispositivo'); });
+      rerenderAll(); openCard(rg); switchFS('docs');
+      toast('Documento anexado: '+f.name);
+    };
+    rd.onerror=function(){ toast('Falha ao ler o arquivo'); };
+    rd.readAsDataURL(f);
+  };
+  inp.click();
+}
+
+/* ---------- BLOQUEIO DE CARTÃO ---------- */
+function admToggleBloq(){
+  if(!ADM){ admToast(); return; }
+  if(!CUR) return;
+  var rg=CUR.rg, novo=!(OVR[rg]&&OVR[rg].bloq);
+  saveOvr(rg,{bloq:novo});
+  openCard(rg); switchFS('seg');
+  toast(novo?'Cartão bloqueado':'Cartão desbloqueado');
 }
 
 /* ---------- LINK INDIVIDUAL: ?foto=RG ---------- */
@@ -3943,6 +4096,7 @@ function pmUploadMode(rg){
     '<div class="row2"><div><label>RG PM</label><input id="afRg" inputmode="numeric" autocomplete="off"></div>'+
     '<div><label>Posto / Graduação</label><select id="afPosto"></select></div></div>'+
     '<label>Função / Seção</label><input id="afFunc" autocomplete="off" placeholder="ex.: PROJETOS, P1, DEM - ALA / B">'+
+    '<label>Pasta / Seção (manual)</label><select id="afRep"></select>'+
     '<label>Situação</label><select id="afSit"></select>'+
     '<div class="chk"><input type="checkbox" id="afAdido"><label for="afAdido" style="margin:0;text-transform:none;font-size:13.5px;">Militar ADIDO</label></div>'+
     '<label>Foto 3×4</label><div class="adm-foto"><div class="pv" id="afPv">sem foto</div>'+
