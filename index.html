@@ -414,6 +414,27 @@
     padding:5px 0 7px;background:#ffffffb0;border-top:1px solid #dde3ea;font-weight:600;
   }
 
+/* ============ LINK INDIVIDUAL DO MILITAR (upload de foto) ============ */
+#pmUpOv{position:fixed;inset:0;z-index:80;background:linear-gradient(160deg,#0e2240,#16325c);
+  display:none;align-items:center;justify-content:center;padding:16px;}
+#pmUpOv.open{display:flex;}
+.pmup{background:#fff;border-radius:18px;width:min(420px,96vw);padding:26px 22px;text-align:center;
+  box-shadow:0 20px 70px #000a;}
+.pmup img.crest{width:64px;height:64px;object-fit:contain;margin-bottom:8px;}
+.pmup h2{color:var(--navy);font-size:17px;letter-spacing:.06em;}
+.pmup .who{margin:10px 0 2px;font-weight:800;color:var(--ink);font-size:16px;}
+.pmup .rgline{color:var(--mut);font-size:12.5px;margin-bottom:14px;}
+.pmup .pv{width:120px;height:160px;margin:0 auto 14px;border-radius:12px;background:#eef1f5;
+  overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:12px;
+  border:2px dashed #c7cfda;}
+.pmup .pv img{width:100%;height:100%;object-fit:cover;}
+.pmup button{width:100%;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:800;
+  cursor:pointer;background:var(--navy);color:#fff;margin-top:4px;}
+.pmup button:hover{background:var(--navy2);}
+.pmup .hint{font-size:11.5px;color:var(--mut);margin-top:12px;line-height:1.5;}
+.pmup .done{display:none;color:var(--green);font-weight:800;font-size:14px;margin-top:12px;}
+.pmup .done.on{display:block;}
+
 /* ===================== MODO ADM ===================== */
 .mc-admbtns{position:absolute;top:6px;right:6px;display:flex;gap:5px;z-index:4;}
 .mc{position:relative;}
@@ -3866,6 +3887,40 @@ function admDelete(rg){
   toast('Militar removido do painel');
 }
 
+/* ---------- LINK INDIVIDUAL: ?foto=RG ---------- */
+function pmUploadMode(rg){
+  var m=EFETIVO.find(function(x){return x.rg===rg;});
+  var ov=document.createElement('div'); ov.id='pmUpOv';
+  if(!m){
+    ov.innerHTML='<div class="pmup"><img class="crest" src="'+BRASAO+'"><h2>COE DIGITAL ID</h2>'+
+      '<div class="who">Link inválido</div><div class="rgline">RG '+esc(rg)+' não localizado no efetivo. Procure a SPAEI.</div></div>';
+    document.body.appendChild(ov); ov.classList.add('open'); return;
+  }
+  var f=fotoDe(rg);
+  ov.innerHTML='<div class="pmup"><img class="crest" src="'+BRASAO+'">'+
+    '<h2>COE DIGITAL ID · ENVIO DE FOTO</h2>'+
+    '<div class="who">'+esc(m.posto)+' '+esc(m.nome)+'</div>'+
+    '<div class="rgline">RG PM: '+esc(rg)+'</div>'+
+    '<div class="pv" id="pmPv">'+(f?'<img src="'+f+'">':'sem foto')+'</div>'+
+    '<button id="pmBtn">📷 Enviar / trocar foto 3×4</button>'+
+    '<div class="done" id="pmDone">✔ Foto enviada com sucesso! Já está no painel do COE.</div>'+
+    '<div class="hint">Use uma foto de rosto, fundo claro, proporção retrato (3×4).<br>A imagem é comprimida automaticamente antes do envio.</div></div>';
+  document.body.appendChild(ov); ov.classList.add('open');
+  document.getElementById('pmBtn').onclick=function(){
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='user';
+    inp.onchange=function(e){
+      var file=e.target.files&&e.target.files[0]; if(!file) return;
+      compressImage(file,function(data){
+        if(!data){ toast('Falha ao processar a imagem'); return; }
+        saveOvr(rg,{foto:data});
+        document.getElementById('pmPv').innerHTML='<img src="'+data+'">';
+        document.getElementById('pmDone').classList.add('on');
+      });
+    };
+    inp.click();
+  };
+}
+
 /* ---------- boot ADM ---------- */
 (function(){
   var lg=document.createElement('div');
@@ -3908,6 +3963,15 @@ function admDelete(rg){
   }catch(e){}
 
   rerenderAll();
+
+  try{
+    var q=new URLSearchParams(location.search);
+    var frg=q.get('foto');
+    if(frg){
+      if(FB_DB){ setTimeout(function(){ pmUploadMode(frg.trim()); },600); }
+      else pmUploadMode(frg.trim());
+    }
+  }catch(e){}
 })();
 
 </script>
