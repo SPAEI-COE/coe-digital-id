@@ -54,6 +54,14 @@
     justify-content:center;transition:all .15s;margin-left:2px;}
   .hdr-fs:hover{background:#ffffff22;color:#fff;}
   .hdr-fs svg{width:18px;height:18px;}
+  .hdr-fs.adm-on{background:var(--gold);border-color:var(--gold);color:var(--navy);}
+  .conn{display:flex;align-items:center;gap:7px;margin-left:6px;background:#ffffff10;
+    border:1px solid #ffffff1e;border-radius:99px;padding:5px 12px;}
+  .conn .d{width:8px;height:8px;border-radius:50%;background:#f0b429;flex:none;
+    box-shadow:0 0 0 3px #f0b42933;transition:all .3s;}
+  .conn.on .d{background:#2ecc71;box-shadow:0 0 0 3px #2ecc7133;}
+  .conn.off .d{background:#e74c3c;box-shadow:0 0 0 3px #e74c3c33;}
+  .conn b{font-size:8.5px;letter-spacing:.14em;color:#c9d3e2;white-space:nowrap;}
   .hdr-clock{text-align:right;margin-left:8px;}
   .hdr-clock b{font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:.04em;display:block;line-height:1;}
   .hdr-clock span{font-size:10px;color:#c9d3e2;letter-spacing:.08em;text-transform:capitalize;}
@@ -133,9 +141,9 @@
     border-radius:99px;padding:4px 11px;letter-spacing:.06em;}
 
   /* ---------- pastas por seção ---------- */
-  #grid.folders{align-content:start;}
+  #grid.folders{align-content:start;grid-auto-rows:1fr;}
   .fd{
-    position:relative;border-radius:14px;cursor:pointer;overflow:hidden;
+    position:relative;border-radius:14px;cursor:pointer;overflow:hidden;min-height:176px;
     background:linear-gradient(165deg,#fdfdfe 0%,#eef1f5 60%,#e2e7ec 100%);
     border:1px solid #cdd5de;box-shadow:0 2px 6px #1c273314,0 10px 24px #1c273310;
     display:flex;flex-direction:column;transition:transform .16s, box-shadow .16s;
@@ -149,7 +157,7 @@
   .fd-count b{font-size:21px;color:var(--ink);margin-right:5px;}
   .fd-prev{display:flex;align-items:center;}
   .fd-av{
-    width:34px;height:34px;border-radius:50%;flex:none;margin-right:-9px;overflow:hidden;
+    width:40px;height:40px;border-radius:50%;flex:none;margin-right:-10px;overflow:hidden;
     border:2px solid #fff;background:linear-gradient(165deg,#243a58,#16283f);
     display:flex;align-items:center;justify-content:center;
     font-size:11px;font-weight:800;color:#e3c377;letter-spacing:.03em;
@@ -157,6 +165,9 @@
   }
   .fd-av img{width:100%;height:100%;object-fit:cover;}
   .fd-av.more{background:#e8ebef;color:#3c4a5c;font-size:10px;}
+  .fd-fotos{font-size:9.5px;font-weight:800;letter-spacing:.06em;color:var(--mut);
+    background:#e8ebef;border-radius:99px;padding:3px 9px;margin-left:auto;white-space:nowrap;}
+  .fd-fotos.ok{background:#d9f2e4;color:#177245;}
   .fd-foot{flex:none;display:flex;align-items:center;justify-content:space-between;
     padding:8px 14px;background:#ffffffb8;border-top:1px solid #d6dde4;}
   .fd-foot span{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--mut);text-transform:uppercase;}
@@ -530,6 +541,7 @@
   <button class="hdr-fs" id="fsBtn" title="Tela cheia (ideal para a TV)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
   </button>
+  <div class="conn" id="connDot" title="Estado da sincronização com o banco em tempo real"><span class="d"></span><b>SINCRONIZANDO…</b></div>
   <div class="hdr-clock" id="hdrClock" title="Data e hora oficiais de Brasília"><b id="clkTime">--:--</b><span id="clkDate">—</span></div>
 </header>
 
@@ -3031,6 +3043,7 @@ function renderStats(list){
     '<div class="stat" data-act="secoes" title="Voltar às pastas por seção"><b>'+nSec+'</b><span>Seções</span></div>'+
     '<div class="stat" data-act="total" title="Ver o efetivo completo em grade"><b>'+EFETIVO.length+'</b><span>Efetivo total</span></div>'+
     '<div class="stat'+(state.adidos?' on':'')+'" data-act="adidos" title="Filtrar apenas os adidos"><b>'+adidos+'</b><span>Adidos</span></div>'+
+    '<div class="stat'+(state.semFoto?' on':'')+'" data-act="fotos" title="Filtrar militares sem foto anexada"><b>'+EFETIVO.filter(function(m){return !fotoDe(m.rg);}).length+'</b><span>Sem foto</span></div>'+
     '<div class="stat" data-act="exib" title="Militares atualmente em exibição" style="cursor:default;"><b>'+list.length+'</b><span>Em exibição</span></div>';
   el.querySelectorAll('.stat').forEach(function(s){
     var act=s.getAttribute('data-act');
@@ -3039,14 +3052,14 @@ function renderStats(list){
 }
 
 /* ---------- filtros / navegação ---------- */
-var state={rep:'TODOS', q:'', view:'pastas', pasta:null, adidos:false};
+var state={rep:'TODOS', q:'', view:'pastas', pasta:null, adidos:false, semFoto:false};
 /* view: 'pastas' (seções em pastas) | 'grade' (todos os cards)
    pasta: repartição aberta dentro da visão de pastas
    adidos: quando true, restringe a exibição aos militares adidos */
 
 /* ---------- cabeçalho interativo ---------- */
 function goHome(){
-  state.view='pastas'; state.pasta=null; state.rep='TODOS'; state.q=''; state.adidos=false;
+  state.view='pastas'; state.pasta=null; state.rep='TODOS'; state.q=''; state.adidos=false; state.semFoto=false;
   document.getElementById('q').value=''; hideSugg();
   document.querySelectorAll('#viewToggle button').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-v')==='pastas');
@@ -3064,6 +3077,15 @@ function statAction(act){
         b.classList.toggle('on', b.getAttribute('data-v')==='grade');
       });
       toast('Exibindo apenas militares adidos');
+    }
+    syncBars(); renderGrid();
+  }else if(act==='fotos'){  /* alterna filtro sem foto — apoia a cobrança de anexos */
+    state.semFoto=!state.semFoto;
+    if(state.semFoto){ state.view='grade'; state.rep='TODOS'; state.pasta=null; state.adidos=false;
+      document.querySelectorAll('#viewToggle button').forEach(function(b){
+        b.classList.toggle('on', b.getAttribute('data-v')==='grade');
+      });
+      toast('Exibindo apenas militares SEM foto anexada');
     }
     syncBars(); renderGrid();
   }else if(act==='secoes'){ goHome(); }
@@ -3118,7 +3140,7 @@ function buildSugg(q){
   if(mils.length){
     html+='<div class="sg-lb">Militares</div>';
     mils.forEach(function(m){
-      var f=FOTOS[m.rg];
+      var f=fotoDe(m.rg);
       suggItems.push({t:'mil',v:m.rg});
       html+='<div class="sg-it" data-i="'+(suggItems.length-1)+'">'+
         '<div class="sg-av">'+(f?'<img src="'+f+'" alt="">':esc(initials(m.nome)))+'</div>'+
@@ -3173,6 +3195,7 @@ function filtered(){
   var rep = (state.view==='pastas') ? (state.pasta||'TODOS') : state.rep;
   return EFETIVO.filter(function(m){
     if(state.adidos && !m.adido) return false;
+    if(state.semFoto && fotoDe(m.rg)) return false;
     if(rep!=='TODOS' && m.rep!==rep) return false;
     if(state.q){
       var alvo=(m.nome+' '+m.rg+' '+m.funcao+' '+m.posto+' '+m.rep).toLowerCase();
@@ -3185,7 +3208,7 @@ function filtered(){
 /* ---------- visão por PASTAS (seções) ---------- */
 function setView(v){
   state.view=v; state.pasta=null; state.rep='TODOS';
-  if(v==='pastas') state.adidos=false;
+  if(v==='pastas'){ state.adidos=false; state.semFoto=false; }
   document.querySelectorAll('#viewToggle button').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-v')===v);
   });
@@ -3220,11 +3243,13 @@ function syncBars(){
 var FOLDER_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>';
 function folderHTML(rep, list){
   var cor=repColor(rep);
-  var prev=list.slice(0,4).map(function(m){
+  var comFoto=list.filter(function(m){return !!fotoDe(m.rg);});
+  var prevList=comFoto.concat(list.filter(function(m){return !fotoDe(m.rg);})).slice(0,6);
+  var prev=prevList.map(function(m){
     var f=fotoDe(m.rg);
     return '<div class="fd-av">'+(f?'<img src="'+f+'" alt="">':esc(initials(m.nome)))+'</div>';
   }).join('');
-  if(list.length>4) prev+='<div class="fd-av more">+'+(list.length-4)+'</div>';
+  if(list.length>6) prev+='<div class="fd-av more">+'+(list.length-6)+'</div>';
   var chefes=list.filter(function(m){return /CHEFE|CMT/.test(_normFunc(m.funcao));}).length;
   var adidos=list.filter(function(m){return m.adido;}).length;
   var sub=[];
@@ -3234,7 +3259,8 @@ function folderHTML(rep, list){
   '<div class="fd" data-rep="'+esc(rep)+'">'+
     '<div class="fd-tab" style="background:linear-gradient(160deg,'+cor+','+cor+'cc)">'+FOLDER_SVG+'<b>'+esc(rep)+'</b></div>'+
     '<div class="fd-body">'+
-      '<div class="fd-count"><b>'+list.length+'</b>'+(list.length>1?'militares':'militar')+'</div>'+
+      '<div class="fd-count" style="display:flex;align-items:center;"><span><b>'+list.length+'</b>'+(list.length>1?'militares':'militar')+'</span>'+
+        '<span class="fd-fotos'+(comFoto.length===list.length?' ok':'')+'" title="Fotos anexadas nesta seção">📷 '+comFoto.length+'/'+list.length+'</span></div>'+
       '<div class="fd-prev">'+prev+'</div>'+
     '</div>'+
     '<div class="fd-foot"><span>'+esc(sub.join(' · ')||'Seção operacional')+'</span><span class="go">Abrir ›</span></div>'+
@@ -3248,7 +3274,9 @@ function renderFolders(){
   grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
   var g={}; EFETIVO.forEach(function(m){ (g[m.rep]=g[m.rep]||[]).push(m); });
   var html='';
-  allReps().forEach(function(r){ if(g[r]) html+=folderHTML(r, g[r]); });
+  allReps().filter(function(r){return g[r];})
+    .sort(function(a,b){ return g[b].length-g[a].length; })
+    .forEach(function(r){ html+=folderHTML(r, g[r]); });
   grid.innerHTML=html;
   grid.querySelectorAll('.fd').forEach(function(f){
     f.onclick=function(){ openPasta(f.getAttribute('data-rep')); };
@@ -3348,12 +3376,17 @@ function autoShrink(el){
 
 /* ---------- MODO TV: rolagem automática ---------- */
 var tvOn=false, tvRAF=null, tvPauseUntil=0, tvDir=1;
-document.getElementById('tvToggle').onclick=function(){
-  tvOn=!tvOn;
-  this.classList.toggle('on',tvOn);
-  if(tvOn){ tvPauseUntil=0; tvLoop(); toast('Modo TV ativado · rolagem automática'); }
-  else if(tvRAF){ cancelAnimationFrame(tvRAF); tvRAF=null; }
-};
+function setTV(on,quiet){
+  tvOn=!!on;
+  document.getElementById('tvToggle').classList.toggle('on',tvOn);
+  try{ localStorage.setItem('coeid_tv', tvOn?'1':'0'); }catch(e){}
+  if(tvOn){
+    if(state.view!=='grade') setView('grade');   /* TV exibe o efetivo completo com fotos */
+    tvPauseUntil=0; tvLoop();
+    if(!quiet) toast('Modo TV ativado · grade completa + rolagem automática');
+  } else if(tvRAF){ cancelAnimationFrame(tvRAF); tvRAF=null; }
+}
+document.getElementById('tvToggle').onclick=function(){ setTV(!tvOn); };
 function tvLoop(){
   var w=document.getElementById('gridWrap');
   function step(ts){
@@ -3631,9 +3664,10 @@ function openFotoSheet(){
     compressImage(f,function(data){
       if(!data){ toast('Falha ao processar a imagem'); return; }
       var rg=CUR.rg, nome=CUR.nome;
-      if(ADM){ saveOvr(rg,{foto:data}); }
-      else { FOTOS[rg]=data; saveFotos(); }
-      toast('Foto anexada para '+nome.split(' ')[0]);
+      FOTOS[rg]=data; saveFotos();          /* fallback local imediato */
+      saveOvr(rg,{foto:data});              /* persiste no banco → pastas e TV */
+      logAcao('Foto anexada (card)', nome+' (RG '+rg+')');
+      toast('Foto anexada para '+nome.split(' ')[0]+' — sincronizada no painel');
       closeSheet(); closeCard(); renderGrid(); openCard(rg);
     });
   };
@@ -3786,6 +3820,16 @@ if(FB_DB){
     FB_ON=true; OVR=snap.val()||{}; ovrLS(); rerenderAll();
   },function(){ FB_ON=false; });
   FB_DB.ref('coeid/admins').on('value',function(snap){ ADMIN_SET=snap.val()||null; });
+  FB_DB.ref('.info/connected').on('value',function(snap){
+    var on=!!snap.val(); FB_ON=on;
+    var el=document.getElementById('connDot'); if(!el) return;
+    el.classList.toggle('on',on); el.classList.toggle('off',!on);
+    el.querySelector('b').textContent = on?'BANCO ONLINE':'SEM CONEXÃO';
+  });
+}
+if(!FB_DB){
+  var _cd=document.getElementById('connDot');
+  if(_cd){ _cd.classList.add('off'); _cd.querySelector('b').textContent='MODO LOCAL'; }
 }
 
 function saveOvr(rg,patch){
@@ -3848,6 +3892,7 @@ function admLoginTry(){
   if(FB_DB && !ADMIN_SET){ FB_DB.ref('coeid/admins').set(ADMIN_FALLBACK).catch(function(){}); }
   document.getElementById('admLoginOv').classList.remove('open');
   document.getElementById('admBar').classList.add('on');
+  syncAdmBtn();
   renderGrid(); updateVencBadge();
   logAcao('Login administrador','RG '+rg);
   toast('Modo administrador ativado — RG '+rg);
@@ -3857,8 +3902,14 @@ function admLogout(){
   ADM=null;
   try{ sessionStorage.removeItem('coeid_adm'); }catch(e){}
   document.getElementById('admBar').classList.remove('on');
+  syncAdmBtn();
   renderGrid();
-  toast('Modo administrador encerrado');
+  toast('Sessão administrativa encerrada');
+}
+function syncAdmBtn(){
+  var b=document.getElementById('admBtn'); if(!b) return;
+  b.classList.toggle('adm-on', !!ADM);
+  b.title = ADM ? 'Sair da área administrativa (RG '+ADM+')' : 'Área administrativa (entrar)';
 }
 
 /* ---------- Edição de campo avulso (linhas Pendente · ADM) ---------- */
@@ -4298,14 +4349,20 @@ function pmUploadMode(rg){
   document.getElementById('alPw').addEventListener('keydown',function(e){ if(e.key==='Enter') admLoginTry(); });
 
   document.getElementById('admBtn').onclick=function(){ if(ADM) admLogout(); else admLoginOpen(); };
+  syncAdmBtn();
 
   try{
     var s=sessionStorage.getItem('coeid_adm');
-    if(s){ ADM=s; document.getElementById('admBar').classList.add('on'); }
+    if(s){ ADM=s; document.getElementById('admBar').classList.add('on'); syncAdmBtn(); }
   }catch(e){}
 
   rerenderAll();
 
+  try{
+    if(new URLSearchParams(location.search).get('tv')==='1' || localStorage.getItem('coeid_tv')==='1'){
+      setTimeout(function(){ setTV(true,true); },400);   /* TV religa sozinha após queda de energia */
+    }
+  }catch(e){}
   try{
     var q=new URLSearchParams(location.search);
     var frg=q.get('foto');
