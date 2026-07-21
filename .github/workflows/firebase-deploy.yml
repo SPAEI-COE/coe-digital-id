@@ -1,4 +1,4 @@
-name: Deploy COE DIGITAL ID no Firebase Hosting
+name: Deploy to Firebase Hosting
 
 on:
   push:
