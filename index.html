@@ -3912,20 +3912,44 @@ function syncAdmBtn(){
   b.title = ADM ? 'Sair da área administrativa (RG '+ADM+')' : 'Área administrativa (entrar)';
 }
 
-/* ---------- Edição de campo avulso (linhas Pendente · ADM) ---------- */
+/* ---------- Edição de campo avulso (linhas Pendente · ADM) ----------
+   Usa modal próprio (não window.prompt): prompt()/confirm() nativos não
+   abrem em app instalado/tela cheia (PWA em tablet ou TV), cenário de uso
+   deste painel — por isso os cliques do ADM não produziam efeito algum. */
+var FIELD_EDIT_KEY=null;
 function admEditField(k){
   if(!ADM){ admToast(); return; }
   if(!CUR) return;
-  var cur=fld(k);
-  var v=window.prompt('Editar "'+k+'" — '+CUR.nome+'\n(vazio remove o valor)', cur||'');
-  if(v===null) return;
-  var d={}; d[k]=v.trim();
-  saveOvr(CUR.rg,{dados:d});
-  logAcao('Editou campo "'+k+'"', CUR.nome+' (RG '+CUR.rg+')');
-  var rg=CUR.rg;
+  FIELD_EDIT_KEY=k;
+  document.getElementById('afeTitle').textContent='Editar "'+k+'"';
+  document.getElementById('afeSub').textContent=CUR.nome+' · RG '+CUR.rg;
+  document.getElementById('afeVal').value=fld(k)||'';
+  document.getElementById('admFieldOv').classList.add('open');
+  document.getElementById('afeVal').focus();
+}
+function admFieldEditSave(){
+  var k=FIELD_EDIT_KEY; if(!k||!CUR){ document.getElementById('admFieldOv').classList.remove('open'); return; }
+  var v=document.getElementById('afeVal').value.trim();
+  document.getElementById('admFieldOv').classList.remove('open');
+  var d={}; d[k]=v;
+  var nome=CUR.nome, rg=CUR.rg;
+  saveOvr(rg,{dados:d});
+  logAcao('Editou campo "'+k+'"', nome+' (RG '+rg+')');
   if(document.getElementById('sheetOv').classList.contains('open')){ closeSheet(); }
   openCard(rg);
   toast('"'+k+'" atualizado');
+}
+/* ---------- Confirmação (substitui window.confirm nativo) ---------- */
+var CONFIRM_CB=null;
+function admConfirm(msg,cb){
+  CONFIRM_CB=cb;
+  document.getElementById('acMsg').textContent=msg;
+  document.getElementById('admConfirmOv').classList.add('open');
+}
+function admConfirmYes(){
+  document.getElementById('admConfirmOv').classList.remove('open');
+  var cb=CONFIRM_CB; CONFIRM_CB=null;
+  if(cb) cb();
 }
 
 /* ---------- Formulário criar/editar militar ---------- */
@@ -3991,11 +4015,12 @@ function admFormSave(){
 function admDelete(rg){
   if(!ADM){ admToast(); return; }
   var m=EFETIVO.find(function(x){return x.rg===rg;}); if(!m) return;
-  if(!window.confirm('Excluir '+m.posto+' '+m.nome+' (RG '+rg+') do painel?')) return;
-  var base=EFETIVO_BASE.some(function(x){return x.rg===rg;});
-  if(base) saveOvr(rg,{del:true}); else removeOvr(rg);
-  logAcao('Excluiu militar', m.posto+' '+m.nome+' (RG '+rg+')');
-  toast('Militar removido do painel');
+  admConfirm('Excluir '+m.posto+' '+m.nome+' (RG '+rg+') do painel?', function(){
+    var base=EFETIVO_BASE.some(function(x){return x.rg===rg;});
+    if(base) saveOvr(rg,{del:true}); else removeOvr(rg);
+    logAcao('Excluiu militar', m.posto+' '+m.nome+' (RG '+rg+')');
+    toast('Militar removido do painel');
+  });
 }
 
 /* ---------- SEÇÕES / PASTAS DINÂMICAS ---------- */
@@ -4047,15 +4072,16 @@ function admSecAdd(){
   toast('Pasta "'+nm+'" criada — mova militares pelo cadastro deles');
 }
 function admSecDel(nm){
-  if(!window.confirm('Excluir a pasta "'+nm+'"? Os militares dela voltam para a pasta automática da função.')) return;
-  delete SECOES_CUSTOM[nm]; secLS();
-  if(FB_DB) FB_DB.ref('coeid/secoes/'+nm.replace(/[.#$\[\]\/]/g,'_')).remove().catch(function(){});
-  Object.keys(OVR).forEach(function(rg){
-    if(OVR[rg]&&OVR[rg].rep===nm) saveOvr(rg,{rep:null});
+  admConfirm('Excluir a pasta "'+nm+'"? Os militares dela voltam para a pasta automática da função.', function(){
+    delete SECOES_CUSTOM[nm]; secLS();
+    if(FB_DB) FB_DB.ref('coeid/secoes/'+nm.replace(/[.#$\[\]\/]/g,'_')).remove().catch(function(){});
+    Object.keys(OVR).forEach(function(rg){
+      if(OVR[rg]&&OVR[rg].rep===nm) saveOvr(rg,{rep:null});
+    });
+    logAcao('Excluiu pasta', nm);
+    rerenderAll(); admSecoes();
+    toast('Pasta excluída');
   });
-  logAcao('Excluiu pasta', nm);
-  rerenderAll(); admSecoes();
-  toast('Pasta excluída');
 }
 
 /* ---------- DOCUMENTOS DO MILITAR ---------- */
@@ -4081,11 +4107,12 @@ function docOpen(rg,id){
 }
 function docDel(rg,id){
   if(!ADM){ admToast(); return; }
-  if(!window.confirm('Excluir o documento?')) return;
-  if(OVR[rg]&&OVR[rg].docs) delete OVR[rg].docs[id];
-  ovrLS(); if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).remove().catch(function(){});
-  logAcao('Excluiu documento', 'RG '+rg);
-  rerenderAll(); if(CUR) { openCard(rg); switchFS('docs'); }
+  admConfirm('Excluir o documento?', function(){
+    if(OVR[rg]&&OVR[rg].docs) delete OVR[rg].docs[id];
+    ovrLS(); if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/docs/'+id).remove().catch(function(){});
+    logAcao('Excluiu documento', 'RG '+rg);
+    rerenderAll(); if(CUR) { openCard(rg); switchFS('docs'); }
+  });
 }
 var DOC_CATS=['IDENTIDADE','CNH','APTIDÃO','CURSO','AJD','SAÚDE','ELOGIO/PUNIÇÃO','OUTROS'];
 var DOC_FILE=null;
@@ -4345,6 +4372,26 @@ function pmUploadMode(rg){
     '<button class="ok" onclick="admFormSave()">Salvar</button></div></div>';
   document.body.appendChild(fm);
   fm.addEventListener('click',function(e){ if(e.target===fm) fm.classList.remove('open'); });
+
+  var fe=document.createElement('div');
+  fe.className='adm-ov'; fe.id='admFieldOv';
+  fe.innerHTML='<div class="adm-box">'+
+    '<h3 id="afeTitle">Editar campo</h3><div class="sub" id="afeSub"></div>'+
+    '<label>Valor</label><textarea id="afeVal" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #d4dae2;border-radius:9px;font:inherit;resize:vertical;box-sizing:border-box;"></textarea>'+
+    '<div class="sub" style="margin-top:6px;margin-bottom:0;">Deixe em branco para remover o valor.</div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'admFieldOv\').classList.remove(\'open\')">Cancelar</button>'+
+    '<button class="ok" onclick="admFieldEditSave()">Salvar</button></div></div>';
+  document.body.appendChild(fe);
+  fe.addEventListener('click',function(e){ if(e.target===fe) fe.classList.remove('open'); });
+
+  var cf=document.createElement('div');
+  cf.className='adm-ov'; cf.id='admConfirmOv';
+  cf.innerHTML='<div class="adm-box">'+
+    '<h3>Confirmar ação</h3><div class="sub" id="acMsg"></div>'+
+    '<div class="btns"><button class="cx" onclick="document.getElementById(\'admConfirmOv\').classList.remove(\'open\')">Cancelar</button>'+
+    '<button class="ok" onclick="admConfirmYes()">Confirmar</button></div></div>';
+  document.body.appendChild(cf);
+  cf.addEventListener('click',function(e){ if(e.target===cf) cf.classList.remove('open'); });
 
   document.getElementById('alPw').addEventListener('keydown',function(e){ if(e.key==='Enter') admLoginTry(); });
 
