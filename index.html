@@ -141,37 +141,153 @@
     border-radius:99px;padding:4px 11px;letter-spacing:.06em;}
 
   /* ---------- pastas por seção ---------- */
-  #grid.folders{align-content:start;grid-auto-rows:1fr;}
+  #grid.folders{align-content:start;}
   .fd{
-    position:relative;border-radius:14px;cursor:pointer;overflow:hidden;min-height:176px;
+    position:relative;border-radius:12px;cursor:pointer;overflow:hidden;min-height:0;
+    container-type:inline-size;
     background:linear-gradient(165deg,#fdfdfe 0%,#eef1f5 60%,#e2e7ec 100%);
     border:1px solid #cdd5de;box-shadow:0 2px 6px #1c273314,0 10px 24px #1c273310;
     display:flex;flex-direction:column;transition:transform .16s, box-shadow .16s;
   }
   .fd:hover{transform:translateY(-3px);box-shadow:0 6px 14px #1c273322,0 18px 34px #1c273318;}
-  .fd-tab{flex:none;display:flex;align-items:center;gap:9px;padding:11px 14px 9px;color:#fff;}
-  .fd-tab svg{width:21px;height:21px;flex:none;}
-  .fd-tab b{font-size:14px;letter-spacing:.09em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .fd-body{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:10px 14px 12px;gap:9px;}
-  .fd-count{font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--mut);text-transform:uppercase;}
-  .fd-count b{font-size:21px;color:var(--ink);margin-right:5px;}
-  .fd-prev{display:flex;align-items:center;}
+  .fd-tab{flex:none;display:flex;align-items:center;gap:6px;padding:7px 10px 6px;color:#fff;}
+  .fd-tab svg{width:15px;height:15px;flex:none;}
+  .fd-tab b{font-size:11.5px;letter-spacing:.07em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .fd-body{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:7px 10px 8px;gap:6px;}
+  .fd-count{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--mut);text-transform:uppercase;}
+  .fd-count b{font-size:16px;color:var(--ink);margin-right:4px;}
+  .fd-prev{display:flex;align-items:center;overflow:hidden;}
   .fd-av{
-    width:40px;height:40px;border-radius:50%;flex:none;margin-right:-10px;overflow:hidden;
+    width:27px;height:27px;border-radius:50%;flex:none;margin-right:-7px;overflow:hidden;
     border:2px solid #fff;background:linear-gradient(165deg,#243a58,#16283f);
     display:flex;align-items:center;justify-content:center;
-    font-size:11px;font-weight:800;color:#e3c377;letter-spacing:.03em;
-    box-shadow:0 1px 4px #1c273322;
+    font-size:8.5px;font-weight:800;color:#e3c377;letter-spacing:.03em;
+    box-shadow:0 1px 3px #1c273322;
   }
   .fd-av img{width:100%;height:100%;object-fit:cover;}
-  .fd-av.more{background:#e8ebef;color:#3c4a5c;font-size:10px;}
-  .fd-fotos{font-size:9.5px;font-weight:800;letter-spacing:.06em;color:var(--mut);
-    background:#e8ebef;border-radius:99px;padding:3px 9px;margin-left:auto;white-space:nowrap;}
+  .fd-av.more{background:#e8ebef;color:#3c4a5c;font-size:8px;}
+  .fd-fotos{font-size:8px;font-weight:800;letter-spacing:.04em;color:var(--mut);
+    background:#e8ebef;border-radius:99px;padding:2px 6px;margin-left:auto;white-space:nowrap;}
   .fd-fotos.ok{background:#d9f2e4;color:#177245;}
-  .fd-foot{flex:none;display:flex;align-items:center;justify-content:space-between;
-    padding:8px 14px;background:#ffffffb8;border-top:1px solid #d6dde4;}
-  .fd-foot span{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--mut);text-transform:uppercase;}
-  .fd-foot .go{font-size:10.5px;font-weight:800;color:var(--navy);letter-spacing:.06em;}
+  .fd-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:6px;
+    padding:5px 10px;background:#ffffffb8;border-top:1px solid #d6dde4;}
+  .fd-foot span{font-size:7.5px;font-weight:800;letter-spacing:.09em;color:var(--mut);
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .fd-foot .go{font-size:8.5px;font-weight:800;color:var(--navy);letter-spacing:.05em;flex:none;}
+  /* barra de ausencias da secao (v2.0) */
+  .fd-aus{display:flex;gap:3px;align-items:center;font-size:8px;font-weight:800;
+    letter-spacing:.04em;color:var(--mut);white-space:nowrap;}
+  .fd-aus i{font-style:normal;background:var(--amber-dim);color:var(--amber);
+    border-radius:99px;padding:2px 6px;}
+
+
+  /* ===================== v2.0: DENSIDADE / MIGRACAO / AUSENCIAS ===================== */
+  .dens{flex:none;display:flex;align-items:center;gap:2px;border:1.5px solid #c8d0da;
+    border-radius:10px;background:#fff;overflow:hidden;}
+  .dens button{border:0;background:transparent;cursor:pointer;font-size:15px;font-weight:800;
+    color:#3c4a5c;width:26px;height:30px;line-height:1;transition:background .15s;}
+  .dens button:hover{background:#eef2f7;}
+  .dens span{font-size:10px;font-weight:800;color:var(--mut);min-width:34px;text-align:center;
+    letter-spacing:.03em;}
+  .tb-btn{flex:none;position:relative;display:flex;align-items:center;gap:6px;
+    border:1.5px solid #c8d0da;background:#fff;border-radius:10px;padding:7px 13px;
+    font-size:11px;font-weight:800;letter-spacing:.06em;color:#3c4a5c;cursor:pointer;
+    transition:all .15s;}
+  .tb-btn:hover{border-color:var(--navy);color:var(--navy);}
+  .tb-badge{display:none;background:var(--amber);color:#fff;border-radius:99px;
+    font-size:9px;padding:1px 6px;letter-spacing:0;}
+  .tb-badge.on{display:inline-block;}
+
+  #migBar{display:none;align-items:center;gap:12px;padding:7px 22px;background:#fff8e6;
+    border-bottom:1px solid #f0d9a0;font-size:11.5px;font-weight:700;color:#8a6100;}
+  #migBar.show{display:flex;}
+  #migBar .migtrack{flex:1;height:5px;background:#f0e0b8;border-radius:99px;overflow:hidden;}
+  #migBar .migfill{height:100%;width:0;background:var(--gold);transition:width .3s;}
+
+  /* ---- overlay de ausencias ---- */
+  .aus-ov{z-index:60;}
+  .aus-box{width:min(1500px,95vw);height:min(880px,92vh);background:#fff;border-radius:16px;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px #00000066;}
+  .aus-head{flex:none;display:flex;align-items:center;gap:20px;padding:14px 20px;
+    background:linear-gradient(180deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;position:relative;}
+  .aus-head>div:first-child b{display:block;font-size:17px;letter-spacing:.08em;}
+  .aus-head>div:first-child span{font-size:11px;color:#c9d3e2;letter-spacing:.04em;}
+  .aus-head>div:first-child span b{display:inline;font-size:12.5px;color:var(--gold2);}
+  .aus-nav{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .aus-nav button{border:1px solid #ffffff2e;background:#ffffff12;color:#fff;cursor:pointer;
+    width:30px;height:30px;border-radius:8px;font-size:16px;font-weight:800;line-height:1;}
+  .aus-nav button:hover{background:#ffffff25;}
+  .aus-nav button.hoje{width:auto;padding:0 12px;font-size:11px;letter-spacing:.06em;}
+  .aus-nav span{font-size:11.5px;font-weight:800;color:#c9d3e2;letter-spacing:.05em;min-width:180px;
+    text-align:center;}
+  .aus-x{position:absolute;top:12px;right:14px;width:32px;height:32px;border-radius:50%;
+    background:#ffffff18;border:0;color:#fff;cursor:pointer;font-size:15px;font-weight:800;}
+  .aus-x:hover{background:#ffffff30;}
+  .aus-tools{flex:none;display:flex;align-items:center;gap:14px;padding:10px 20px;
+    border-bottom:1px solid #e5e9f0;background:#f8fafb;flex-wrap:wrap;}
+  .aus-tools input[type=search]{flex:1;min-width:200px;border:1.5px solid #d4dae2;border-radius:9px;
+    padding:8px 12px;font:inherit;font-size:12.5px;}
+  .aus-chk{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#3c4a5c;
+    cursor:pointer;white-space:nowrap;}
+  .aus-leg{display:flex;gap:9px;flex-wrap:wrap;margin-left:auto;}
+  .aus-leg i{font-style:normal;display:flex;align-items:center;gap:5px;font-size:10px;
+    font-weight:800;color:var(--mut);letter-spacing:.05em;text-transform:uppercase;}
+  .aus-leg i b{width:11px;height:11px;border-radius:3px;display:block;}
+  .aus-foot{flex:none;padding:8px 20px;font-size:10.5px;color:var(--mut);background:#f8fafb;
+    border-top:1px solid #e5e9f0;letter-spacing:.03em;}
+
+  .tl-body{flex:1;min-height:0;overflow-y:auto;padding:0 0 10px;}
+  .tl-head{display:flex;position:sticky;top:0;z-index:2;background:#fff;
+    border-bottom:2px solid #d6dde4;}
+  .tl-head .tl-nm{font-size:9.5px;font-weight:800;letter-spacing:.12em;color:var(--mut);
+    padding:9px 12px;text-transform:uppercase;}
+  .tl-head .tl-track{display:flex;}
+  .tl-mes{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--navy);
+    padding:9px 0;text-align:center;border-left:1px solid #e5e9f0;}
+  .tl-row{display:flex;align-items:stretch;border-bottom:1px solid #f0f3f6;min-height:34px;}
+  .tl-row:hover{background:#f8fafb;}
+  .tl-nm{flex:none;width:210px;padding:5px 12px;min-width:0;display:flex;flex-direction:column;
+    justify-content:center;border-right:1px solid #e5e9f0;}
+  .tl-nm b{font-size:11.5px;color:var(--ink);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;letter-spacing:.02em;}
+  .tl-nm span{font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;letter-spacing:.04em;}
+  .tl-track{flex:1;position:relative;min-width:0;}
+  .tl-bar{position:absolute;top:6px;bottom:6px;border-radius:5px;display:flex;align-items:center;
+    padding:0 6px;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px #1c273326;transition:filter .15s;}
+  .tl-bar:hover{filter:brightness(1.12);}
+  .tl-bar span{font-size:9px;font-weight:800;color:#fff;letter-spacing:.05em;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;}
+  .tl-hoje{position:absolute;top:0;bottom:0;width:2px;background:var(--red);opacity:.55;z-index:1;}
+  .tl-add{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:20px;height:20px;
+    border-radius:50%;border:1px dashed #b7c1cd;background:#fff;color:var(--mut);cursor:pointer;
+    font-size:13px;font-weight:800;line-height:1;opacity:0;transition:opacity .15s;}
+  .tl-row:hover .tl-add{opacity:1;}
+  .tl-add:hover{border-color:var(--navy);color:var(--navy);border-style:solid;}
+  .tl-vazio{text-align:center;padding:50px 0;color:var(--mut);font-size:14px;letter-spacing:.04em;}
+
+  .aus-fm{width:min(480px,94vw);}
+  .aus-fm .who{font-size:12px;color:var(--mut);margin:-4px 0 12px;letter-spacing:.03em;}
+  .aus-fm label{display:block;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--mut);
+    text-transform:uppercase;margin:10px 0 5px;}
+  .aus-fm label i{font-style:normal;text-transform:none;letter-spacing:.02em;font-weight:600;
+    color:#8a94a3;}
+  .aus-fm select,.aus-fm input[type=date],.aus-fm textarea{width:100%;padding:9px 11px;
+    border:1.5px solid #d4dae2;border-radius:9px;font:inherit;font-size:13px;box-sizing:border-box;}
+  .aus-fm textarea{resize:vertical;}
+  .aus-fm .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .aus-lgpd{margin-top:12px;font-size:10.5px;color:var(--mut);background:#f4f6f8;
+    border-radius:8px;padding:8px 11px;line-height:1.5;}
+  .btn.danger{background:var(--red-dim);color:var(--red);border:1.5px solid #f0c4bd;margin-top:12px;width:100%;}
+  .btn.danger:hover{background:#f7d8d3;}
+
+  /* linha de ausencia dentro do card individual */
+  .aus-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;
+    background:#f7f8fb;border:1px solid #e5e9f0;margin-bottom:5px;}
+  .aus-item .dot{width:9px;height:9px;border-radius:3px;flex:none;}
+  .aus-item .tx{flex:1;min-width:0;}
+  .aus-item .tx b{display:block;font-size:11.5px;color:var(--ink);}
+  .aus-item .tx span{display:block;font-size:9.5px;color:var(--mut);}
 
   /* ===================== GRADE ===================== */
   .grid-wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px 22px 30px;scroll-behavior:auto;}
@@ -207,8 +323,9 @@
     background:var(--green);color:#fff;white-space:nowrap;}
   .mc-sit.adido{background:var(--amber);}
   .mc-name{
-    flex:none; text-align:center; font-weight:800; letter-spacing:.04em; color:var(--ink);
-    padding:2.8% 5% 0; white-space:nowrap; overflow:hidden; text-transform:uppercase;
+    flex:none; text-align:center; font-weight:800; letter-spacing:.02em; color:var(--ink);
+    padding:2.4% 4% 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-transform:uppercase; line-height:1.15;
   }
   .mc-photo-zone{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:2.5% 6%;}
   .mc-photo{
@@ -225,21 +342,37 @@
     background:#0e2240cc; padding:3% 0; text-transform:uppercase;
   }
   .mc-func{
-    flex:none; text-align:center; padding:1.5% 6% 0;
+    flex:none; text-align:center; padding:1.2% 5% 0;
     font-weight:700; color:#2c3b4e; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; line-height:1.15;
   }
   .mc-rep{flex:none;display:flex;justify-content:center;padding:1.8% 0 0;}
   .mc-rep span{
-    font-weight:800; letter-spacing:.09em; color:#fff; border-radius:99px;
-    padding:1.6% 6%; white-space:nowrap; text-transform:uppercase;
+    font-weight:800; letter-spacing:.06em; color:#fff; border-radius:99px;
+    padding:1.4% 5.5%; white-space:nowrap; text-transform:uppercase;
+    max-width:92%; overflow:hidden; text-overflow:ellipsis;
   }
   .mc-strip{
     flex:none; margin-top:auto; display:flex; align-items:center; justify-content:space-between;
     gap:4%; padding:3.2% 6.5%; background:#ffffffb8; border-top:1px solid #d6dde4;
   }
-  .mc-strip .lb{font-size:52%;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;display:block;}
-  .mc-strip .vl{font-weight:800;color:var(--ink);letter-spacing:.03em;white-space:nowrap;}
+  .mc-strip .lb{font-size:52%;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;
+    display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mc-strip .vl{font-weight:800;color:var(--ink);letter-spacing:.02em;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;display:block;}
+  .mc-strip>div{min-width:0;}
   .mc-strip .r{text-align:right;}
+  /* selo de ausencia vigente sobre a foto (v2.0) */
+  .mc-aus{
+    position:absolute; top:0; left:0; right:0; text-align:center;
+    font-size:46%; font-weight:800; letter-spacing:.1em; color:#fff;
+    background:#b45309e6; padding:3% 0; text-transform:uppercase; z-index:2;
+  }
+  .mc-aus.lts{background:#c0392be6;}
+  /* GPU hint: promove o card a camada propria so no hover, evitando
+     repaint da grade inteira em telas grandes */
+  .mc{will-change:auto;}
+  .mc:hover{will-change:transform;}
 
   /* ===================== OVERLAY CARD COMPLETO ===================== */
   .ov{
@@ -570,10 +703,20 @@
     <kbd>/</kbd>
     <div class="sugg" id="sugg"></div>
   </div>
+  <div class="dens" title="Densidade da grade — ajuste para caber mais ou menos cards na tela">
+    <button onclick="setDens(DENS-0.1)" aria-label="Menos cards">−</button>
+    <span id="densLbl">100%</span>
+    <button onclick="setDens(DENS+0.1)" aria-label="Mais cards">+</button>
+  </div>
+  <button class="tb-btn" onclick="openAusencias()" title="Férias, dispensas, LTS, cursos e missões">
+    📅 AUSÊNCIAS<span class="tb-badge" id="ausBadge"></span>
+  </button>
   <div class="tv-toggle" id="tvToggle" title="Rolagem automática para exibição em TV">
     <span class="dot"></span>MODO TV
   </div>
 </div>
+
+<div id="migBar"><b>Migrando fotos…</b><div class="migtrack"><div class="migfill"></div></div></div>
 
 <div class="grid-wrap" id="gridWrap">
   <div id="grid"></div>
@@ -588,6 +731,46 @@
     <div class="fc" id="fc">
       <div class="fc-screens" id="fcScreens"></div>
       <div class="f-nav" id="fcNav"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OVERLAY: GESTÃO DE AUSÊNCIAS ============ -->
+<div class="ov aus-ov" id="ausOv">
+  <div class="aus-box">
+    <div class="aus-head">
+      <div>
+        <b>Ausências do Efetivo</b>
+        <span id="tlResumo">—</span>
+      </div>
+      <div class="aus-nav">
+        <button onclick="tlNav(-1)" title="Mês anterior">‹</button>
+        <span id="tlPeriodo">—</span>
+        <button onclick="tlNav(1)" title="Próximo mês">›</button>
+        <button onclick="TL_MES=0;renderTimeline()" class="hoje">Hoje</button>
+      </div>
+      <button class="aus-x" onclick="closeAusencias()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="aus-tools">
+      <input type="search" id="tlQ" placeholder="Filtrar por nome, RG ou função…" oninput="renderTimeline()">
+      <label class="aus-chk"><input type="checkbox" id="tlSoAus" onchange="renderTimeline()"> Somente com ausência</label>
+      <div class="aus-leg" id="ausLeg"></div>
+    </div>
+    <div class="tl-body" id="tlBody"></div>
+    <div class="aus-foot">🔒 O período é visível a todos; o motivo e a observação aparecem apenas para administradores.</div>
+  </div>
+</div>
+
+<!-- ============ OVERLAY: FORMULÁRIO DE AUSÊNCIA ============ -->
+<div class="ov" id="ausFmOv">
+  <div class="adm-box aus-fm">
+    <h3 id="ausFmTitle">Lançar ausência</h3>
+    <div class="who" id="ausFmWho">—</div>
+    <div id="ausFmBody"></div>
+    <div class="err" id="ausFmErr"></div>
+    <div class="acts">
+      <button class="btn ghost" onclick="document.getElementById('ausFmOv').classList.remove('open')">Cancelar</button>
+      <button class="btn navy" onclick="ausFmSalvar()">Salvar</button>
     </div>
   </div>
 </div>
@@ -2952,6 +3135,7 @@ var qrcode = function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
 /* ============================================================
    COE DIGITAL ID · PAINEL DO EFETIVO — TV 56"
@@ -3246,12 +3430,13 @@ function folderHTML(rep, list){
   var comFoto=list.filter(function(m){return !!fotoDe(m.rg);});
   var prevList=comFoto.concat(list.filter(function(m){return !fotoDe(m.rg);})).slice(0,6);
   var prev=prevList.map(function(m){
-    var f=fotoDe(m.rg);
-    return '<div class="fd-av">'+(f?'<img src="'+f+'" alt="">':esc(initials(m.nome)))+'</div>';
+    var f=thumbDe(m.rg);
+    return '<div class="fd-av">'+(f?'<img src="'+f+'" alt="" loading="lazy" decoding="async">':esc(initials(m.nome)))+'</div>';
   }).join('');
   if(list.length>6) prev+='<div class="fd-av more">+'+(list.length-6)+'</div>';
   var chefes=list.filter(function(m){return /CHEFE|CMT/.test(_normFunc(m.funcao));}).length;
   var adidos=list.filter(function(m){return m.adido;}).length;
+  var nAus=list.filter(function(m){return !!ausVigente(m.rg);}).length;
   var sub=[];
   if(chefes) sub.push(chefes+(chefes>1?' chefias':' chefia'));
   if(adidos) sub.push(adidos+(adidos>1?' adidos':' adido'));
@@ -3263,15 +3448,24 @@ function folderHTML(rep, list){
         '<span class="fd-fotos'+(comFoto.length===list.length?' ok':'')+'" title="Fotos anexadas nesta seção">📷 '+comFoto.length+'/'+list.length+'</span></div>'+
       '<div class="fd-prev">'+prev+'</div>'+
     '</div>'+
-    '<div class="fd-foot"><span>'+esc(sub.join(' · ')||'Seção operacional')+'</span><span class="go">Abrir ›</span></div>'+
+    '<div class="fd-foot">'+
+      (nAus?'<span class="fd-aus"><i>'+nAus+' ausente'+(nAus>1?'s':'')+'</i></span>':'<span>'+esc(sub.join(' · ')||'Seção operacional')+'</span>')+
+      '<span class="go">Abrir ›</span></div>'+
   '</div>';
 }
 function renderFolders(){
   var grid=document.getElementById('grid');
   grid.classList.add('folders');
-  var w=document.getElementById('gridWrap').clientWidth-44;
-  var cols=Math.max(3, Math.min(6, Math.floor(w/330)));
+  var w=document.getElementById('gridWrap').clientWidth-GRID_PAD;
+  var alvo=Math.round(FD_BASE*densFator());
+  var cols=Math.max(3, Math.min(12, Math.floor((w+GRID_GAP)/(alvo+GRID_GAP))));
   grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
+  grid.style.gap=GRID_GAP+'px';
+  /* altura uniforme proporcional a largura real da coluna: mantem todas as
+     pastas do mesmo tamanho (problema relatado na v1.3) sem depender de
+     min-height fixo, que era o que travava a densidade. */
+  var colW=Math.floor((w-(cols-1)*GRID_GAP)/cols);
+  grid.style.gridAutoRows=Math.max(96,Math.round(colW*0.62))+'px';
   var g={}; EFETIVO.forEach(function(m){ (g[m.rep]=g[m.rep]||[]).push(m); });
   var html='';
   allReps().filter(function(r){return g[r];})
@@ -3286,20 +3480,63 @@ function renderFolders(){
 
 /* ---------- grade: colunas fixas + linhas rolando ---------- */
 var COLS=6, CARD_W=0;
+
+/* ============================================================
+   DENSIDADE DE GRADE  (v2.0)
+   Um unico fator controla pastas e mini-cards. 1.00 = densidade
+   de referencia (dobro da v1.5). Ajustavel pelo usuario no topo,
+   persistido em localStorage — permite afinar na TV real sem
+   depender de nova versao do arquivo.
+   ============================================================ */
+var GRID_GAP=10, GRID_PAD=34;
+var MC_BASE=150;   /* largura-alvo do mini-card em densidade 1.00 */
+var FD_BASE=210;   /* largura-alvo da pasta em densidade 1.00     */
+var DENS=1;
+try{ var _d=parseFloat(localStorage.getItem('coeid_dens_v2')); if(_d>=.6&&_d<=1.8) DENS=_d; }catch(e){}
+/* fator final: densidade do usuario x correcao por resolucao.
+   Telas muito largas (TV 4K) ganham cards proporcionalmente maiores
+   para nao virar mosaico ilegivel; telas pequenas nao encolhem demais. */
+function densFator(){
+  var w=window.innerWidth||1920;
+  var esc = w>=3200 ? 1.55 : (w>=2400 ? 1.25 : 1);
+  return DENS*esc;
+}
+function setDens(v){
+  DENS=Math.max(.6,Math.min(1.8,Math.round(v*100)/100));
+  try{ localStorage.setItem('coeid_dens_v2',String(DENS)); }catch(e){}
+  var lb=document.getElementById('densLbl'); if(lb) lb.textContent=Math.round(DENS*100)+'%';
+  renderGrid();
+}
+
 function computeCols(){
-  var w=document.getElementById('gridWrap').clientWidth-44;
-  COLS=Math.max(3, Math.min(8, Math.floor(w/300)));
-  document.getElementById('grid').style.gridTemplateColumns='repeat('+COLS+',1fr)';
-  CARD_W=Math.floor((w-(COLS-1)*16)/COLS);
+  var w=document.getElementById('gridWrap').clientWidth-GRID_PAD;
+  var alvo=Math.round(MC_BASE*densFator());
+  COLS=Math.max(3, Math.min(16, Math.floor((w+GRID_GAP)/(alvo+GRID_GAP))));
+  var g=document.getElementById('grid');
+  g.style.gridTemplateColumns='repeat('+COLS+',1fr)';
+  g.style.gap=GRID_GAP+'px';
+  CARD_W=Math.floor((w-(COLS-1)*GRID_GAP)/COLS);
 }
 
 function miniCardHTML(m){
-  var foto=fotoDe(m.rg);
+  /* thumb (nao a full) + decoding assincrono + lazy: a grade com 142 cards
+     nao pode decodificar 142 imagens grandes de uma vez. */
+  var foto=thumbDe(m.rg);
   var fotoHTML = foto
-    ? '<img src="'+foto+'" alt="">'
+    ? '<img src="'+foto+'" alt="" loading="lazy" decoding="async">'
     : '<span class="mc-init"></span><div class="mc-fp">Foto pendente</div>';
-  var sitTxt = m.bloq ? 'BLOQUEADO' : (m.situacao || (m.adido ? 'ADIDO' : 'ATIVO'));
-  var sit = '<span class="mc-sit'+((m.adido||m.situacao||m.bloq)?' adido':'')+'">'+esc(sitTxt)+'</span>';
+  /* selo de ausencia vigente — periodo publico, motivo restrito (ver AUS_TIPOS) */
+  var av=ausVigente(m.rg);
+  if(av){
+    var t=AUS_TIPOS[av.t]||{};
+    fotoHTML+='<div class="mc-aus'+(t.sens&&ADM?' lts':'')+'">'+esc(ausRotulo(av))+' até '+isoBR(av.f).slice(0,5)+'</div>';
+  }
+  /* situacao derivada: se ha ausencia vigente ela prevalece sobre o campo manual,
+     eliminando a necessidade de marcar/desmarcar situacao a cada mes. */
+  var sitTxt = m.bloq ? 'BLOQUEADO'
+             : (av ? (ADM ? (AUS_TIPOS[av.t]||{}).r : 'AUSENTE').toUpperCase()
+                   : (m.situacao || (m.adido ? 'ADIDO' : 'ATIVO')));
+  var sit = '<span class="mc-sit'+((m.adido||m.situacao||m.bloq||av)?' adido':'')+'">'+esc(sitTxt)+'</span>';
   return ''+
   '<div class="mc-outer"><div class="mc" data-rg="'+esc(m.rg)+'">'+
     '<div class="mc-head">'+
@@ -3332,38 +3569,45 @@ function renderGrid(){
   }
   grid.innerHTML=list.map(miniCardHTML).join('');
 
-  /* preenchimento textual seguro + escala tipográfica proporcional à largura do card */
+  /* ESCALA TIPOGRAFICA — v2.0
+     A v1.5 rodava autoShrink() por card: loop sincrono lendo scrollWidth/clientWidth,
+     forcando reflow ate ~24x por campo, 2 campos x 142 cards = milhares de reflows
+     por render. Era a causa principal do travamento em TV. Substituido por font-size
+     unico calculado a partir de CARD_W (ja conhecido, zero leitura de layout) +
+     overflow:hidden/ellipsis no CSS como garantia estrutural contra estouro. */
   var fs=CARD_W;
-  grid.querySelectorAll('.mc').forEach(function(card,i){
-    var m=list[i];
-    card.querySelector('.mcr-b').textContent=m.posto;
-    card.querySelector('.mc-name').textContent=m.nome;
-    card.querySelector('.mc-func').textContent=m.funcao;
-    card.querySelector('.mc-rep span').textContent=m.rep;
-    card.querySelector('.mcs-rg').textContent=m.rg;
-    card.querySelector('.mcs-rep').textContent=m.rep;
-    var init=card.querySelector('.mc-init'); if(init) init.textContent=initials(m.nome);
-
-    card.style.fontSize=Math.round(fs*.055)+'px';
-    card.querySelector('.mc-name').style.fontSize=Math.round(fs*.055)+'px';
-    card.querySelector('.mc-func').style.fontSize=Math.round(fs*.045)+'px';
-    card.querySelector('.mc-rep span').style.fontSize=Math.round(fs*.037)+'px';
-    card.querySelector('.mc-strip').style.fontSize=Math.round(fs*.05)+'px';
-    if(init) init.style.fontSize=Math.round(fs*.17)+'px';
-    var fp=card.querySelector('.mc-fp'); if(fp) fp.style.fontSize=Math.max(7,Math.round(fs*.032))+'px';
-
-    autoShrink(card.querySelector('.mc-name'));
-    autoShrink(card.querySelector('.mc-func'));
-    card.onclick=function(){ openCard(m.rg); };
+  var fsBase=Math.round(fs*.058), fsFunc=Math.round(fs*.046),
+      fsRep=Math.max(7,Math.round(fs*.040)), fsStrip=Math.round(fs*.050),
+      fsInit=Math.round(fs*.17), fsFp=Math.max(7,Math.round(fs*.034));
+  var cards=grid.querySelectorAll('.mc');
+  for(var i=0;i<cards.length;i++){
+    var card=cards[i], m=list[i];
+    card.style.fontSize=fsBase+'px';
+    var q=card.querySelector.bind(card);
+    q('.mcr-b').textContent=m.posto;
+    var nm=q('.mc-name'); nm.textContent=nomeGuerra(m.nome); nm.title=m.nome;
+    var fu=q('.mc-func'); fu.textContent=m.funcao;
+    q('.mc-rep span').textContent=m.rep;
+    q('.mcs-rg').textContent=m.rg;
+    q('.mcs-rep').textContent=m.rep;
+    var init=q('.mc-init'); if(init){ init.textContent=initials(m.nome); init.style.fontSize=fsInit+'px'; }
+    nm.style.fontSize=fsBase+'px';
+    fu.style.fontSize=fsFunc+'px';
+    q('.mc-rep span').style.fontSize=fsRep+'px';
+    q('.mc-strip').style.fontSize=fsStrip+'px';
+    var fp=q('.mc-fp'); if(fp) fp.style.fontSize=fsFp+'px';
+    (function(rg){ card.onclick=function(){ openCard(rg); }; })(m.rg);
     if(ADM){
       var eb=document.createElement('div'); eb.className='mc-admbtns';
       eb.innerHTML='<button title="Editar" onclick="event.stopPropagation();admOpenForm(\''+m.rg+'\')">✎</button>'+
                    '<button title="Excluir" onclick="event.stopPropagation();admDelete(\''+m.rg+'\')">🗑</button>';
       card.appendChild(eb);
     }
-  });
+  }
 }
-/* reduz a fonte até o texto caber na largura — sem sobreposição possível */
+/* Utilitario de encolhimento — usado APENAS no card aberto (1 elemento).
+   Nao voltar a chamar isto dentro do loop da grade: foi a causa do
+   travamento da v1.5 (reflow forcado por card). */
 function autoShrink(el){
   if(!el) return;
   var guard=24;
@@ -3372,6 +3616,39 @@ function autoShrink(el){
     if(cur<=7) break;
     el.style.fontSize=(cur-0.5)+'px';
   }
+}
+/* NOME DE GUERRA — ultimo sobrenome significativo, que e como o militar e
+   tratado no dia a dia. Ignora conectivos e sufixos (JUNIOR/FILHO/NETO
+   entram junto com o sobrenome anterior). Cai no nome inteiro se falhar. */
+var _NG_SKIP={'DE':1,'DA':1,'DO':1,'DAS':1,'DOS':1,'E':1,'D':1};
+var _NG_SUF={'JUNIOR':1,'JR':1,'FILHO':1,'NETO':1,'SOBRINHO':1,'SEGUNDO':1};
+function nomeGuerra(nome){
+  if(!nome) return '';
+  var lim=String(nome);
+  /* Registros vindos de CSV podem ter aspas duplicadas e o nome inteiro
+     entre aspas. Normaliza o par duplo e remove as aspas externas antes
+     de tratar as anotacoes internas. */
+  lim=lim.replace(/""/g,String.fromCharCode(34));
+  if(lim.charAt(0)===String.fromCharCode(34)&&lim.charAt(lim.length-1)===String.fromCharCode(34)) lim=lim.slice(1,-1);
+  /* Remove anotacoes entre aspas que existem em varios registros do efetivo
+     (ex.: NOME "APTO B", NOME "B") — sao observacoes administrativas, nao
+     parte do nome. Apostrofo interno (SANT'ANA) e preservado. */
+  lim=lim.replace(/"[^"]*"/g,' ').replace(/"+/g,' ');
+  lim=lim.replace(/\s*-\s*$/,'').trim();
+  var p=lim.split(/\s+/).filter(function(x){ return x && !/^[.\-]+$/.test(x); });
+  if(!p.length) return String(nome).replace(/"/g,'').trim().toUpperCase();
+  var i=p.length-1;
+  var suf='';
+  while(i>0 && _NG_SUF[p[i].toUpperCase().replace(/[^A-ZÀ-Ú]/g,'')]){ suf=' '+p[i]; i--; }
+  while(i>0 && _NG_SKIP[p[i].toUpperCase()]) i--;
+  var base=p[i]||p[p.length-1];
+  /* token curto isolado (1-2 letras) nao e nome de guerra util: sobe um nivel */
+  if(base.replace(/[^A-Za-zÀ-ú]/g,'').length<=2 && i>0){
+    var j=i-1;
+    while(j>0 && _NG_SKIP[p[j].toUpperCase()]) j--;
+    base=p[j];
+  }
+  return (base+suf).toUpperCase();
 }
 
 /* ---------- MODO TV: rolagem automática ---------- */
@@ -3523,9 +3800,12 @@ function screenHTML(m){
   '<div class="fscr" data-s="oper"><div class="sub-card">'+
     '<div class="sc-title">Situação Operacional</div>'+
     '<div class="sec-lb">Prontidão</div>'+
-    dataRow('Status', m.adido?'Adido':'Ativo')+
+    dataRow('Status', ausStatusTxt(m))+
     pendRow('Escala de serviço')+
     pendRow('Restrições operacionais')+
+    '<div class="sec-lb">Ausências'+(ADM?' <i style="font-weight:600;text-transform:none;letter-spacing:0;">(férias, dispensa, LTS, curso, missão)</i>':'')+'</div>'+
+    ausBlocoHTML(m.rg)+
+    (ADM?'<button class="btn navy" style="margin-top:8px" onclick="ausNova(\''+m.rg+'\')">＋ Lançar ausência</button>':'')+
     '<div class="sec-lb">Capacitação</div>'+
     pendRow('Treinamento especializado')+
     pendRow('Aptidão (junta médica)')+
@@ -3575,6 +3855,11 @@ function sizeFC(){
   fc.style.height=Math.floor(h)+'px';
   fc.style.width=Math.floor(w)+'px';
 }
+var _rzT=null;
+window.addEventListener('resize',function(){
+  if(_rzT) clearTimeout(_rzT);
+  _rzT=setTimeout(function(){ _rzT=null; if(typeof renderGrid==='function') renderGrid(); },180);
+});
 window.addEventListener('resize',function(){
   renderGrid();
   if(document.getElementById('cardOv').classList.contains('open')){ sizeFC(); autoFitFC(); }
@@ -3624,6 +3909,289 @@ function autoFitFC(){
   }
 }
 
+
+/* ============================================================
+   MODULO AUSENCIAS  (v2.0)
+   ------------------------------------------------------------
+   Modelo unico para ferias, dispensa, LTS, curso e missao: todos
+   sao a mesma entidade — militar indisponivel num periodo.
+   Persistido em coeid/ovr/<rg>/aus/<id> = {t,i,f,obs}
+     t = tipo (chave de AUS_TIPOS)
+     i = inicio  ISO yyyy-mm-dd
+     f = fim     ISO yyyy-mm-dd
+     obs = observacao (restrita a ADM)
+
+   PRIVACIDADE: o PERIODO e publico (a gestao de escala precisa
+   saber quem esta indisponivel e ate quando); o MOTIVO e o texto
+   so aparecem para ADM logado. Fora do ADM o painel mostra apenas
+   "INDISPONIVEL ate dd/mm". LTS e dado de saude (LGPD art.5 II) e
+   a TV fica em area de circulacao.
+   ============================================================ */
+var AUS_TIPOS={
+  ferias:  {r:'Férias',      c:'#1d7fd4', pub:'Indisponível'},
+  dispensa:{r:'Dispensa',    c:'#b45309', pub:'Indisponível'},
+  lts:     {r:'LTS',         c:'#c0392b', pub:'Indisponível', sens:true},
+  curso:   {r:'Curso',       c:'#6d28d9', pub:'Curso'},
+  missao:  {r:'Missão',      c:'#0f766e', pub:'Missão'},
+  luto:    {r:'Licença',     c:'#4b5563', pub:'Indisponível', sens:true}
+};
+function hojeISO(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function isoBR(iso){
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '—';
+  var a=iso.split('-'); return a[2]+'/'+a[1]+'/'+a[0];
+}
+function diasEntre(a,b){
+  var da=new Date(a+'T00:00:00'), db=new Date(b+'T00:00:00');
+  return Math.round((db-da)/86400000);
+}
+/* lista de ausencias de um militar, ordenada por inicio */
+function ausDe(rg){
+  var o=OVR[rg]; if(!o||!o.aus) return [];
+  var out=[];
+  for(var id in o.aus){
+    var a=o.aus[id];
+    if(a&&a.i&&a.f&&AUS_TIPOS[a.t]) out.push({id:id,t:a.t,i:a.i,f:a.f,obs:a.obs||''});
+  }
+  out.sort(function(x,y){ return x.i<y.i?-1:(x.i>y.i?1:0); });
+  return out;
+}
+/* ausencia vigente hoje (a de termino mais distante, se houver sobreposicao) */
+function ausVigente(rg){
+  var h=hojeISO(), v=null;
+  ausDe(rg).forEach(function(a){ if(a.i<=h&&a.f>=h){ if(!v||a.f>v.f) v=a; } });
+  return v;
+}
+/* proxima ausencia futura */
+function ausProxima(rg){
+  var h=hojeISO(), p=null;
+  ausDe(rg).forEach(function(a){ if(a.i>h&&(!p||a.i<p.i)) p=a; });
+  return p;
+}
+/* rotulo conforme permissao: ADM ve o tipo real; demais veem o rotulo publico */
+function ausRotulo(a){
+  if(!a) return '';
+  var t=AUS_TIPOS[a.t]||{};
+  return ADM ? (t.r||a.t) : (t.pub||'Indisponível');
+}
+function ausCor(a){ var t=AUS_TIPOS[a.t]; return (t&&t.c)||'#647082'; }
+
+/* grava/remove — sempre via saveOvr, que ja sincroniza RTDB + local */
+function ausSalvar(rg,ausObj,id){
+  if(!ADM){ admToast(); return; }
+  var key=id||('a'+Date.now().toString(36));
+  var o=OVR[rg]||{}; var mapa={}; for(var k in (o.aus||{})) mapa[k]=o.aus[k];
+  mapa[key]=ausObj;
+  OVR[rg]=OVR[rg]||{}; OVR[rg].aus=mapa; ovrLS(); rerenderSoon();
+  if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/aus/'+key).set(ausObj).catch(function(){
+    toast('Sem conexão — alteração salva apenas neste dispositivo');
+  });
+  logAcao(id?'Editou ausência':'Lançou ausência', 'RG '+rg+' · '+(AUS_TIPOS[ausObj.t]||{}).r+' '+isoBR(ausObj.i)+'→'+isoBR(ausObj.f));
+}
+function ausRemover(rg,id){
+  if(!ADM){ admToast(); return; }
+  if(OVR[rg]&&OVR[rg].aus) delete OVR[rg].aus[id];
+  ovrLS(); rerenderSoon();
+  if(FB_DB) FB_DB.ref('coeid/ovr/'+rg+'/aus/'+id).remove().catch(function(){});
+  logAcao('Removeu ausência','RG '+rg);
+}
+
+/* ---------- alertas de retorno (ADM) ---------- */
+function ausRetornosProximos(dias){
+  var h=hojeISO(), out=[];
+  EFETIVO.forEach(function(m){
+    var v=ausVigente(m.rg); if(!v) return;
+    var d=diasEntre(h,v.f);
+    if(d>=0&&d<=dias) out.push({m:m,a:v,d:d});
+  });
+  out.sort(function(x,y){ return x.d-y.d; });
+  return out;
+}
+
+/* ============================================================
+   TELA DE GESTAO DE AUSENCIAS — timeline horizontal
+   Linha por militar, barra por periodo. E aqui que a chefia
+   enxerga cobertura da secao e conflito de escala, coisa que
+   card individual nao mostra.
+   ============================================================ */
+var TL_MES=0;   /* offset de meses a partir do mes corrente */
+function tlRange(){
+  var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+TL_MES);
+  var ini=new Date(d.getFullYear(),d.getMonth(),1);
+  var fim=new Date(d.getFullYear(),d.getMonth()+3,0);   /* janela de 3 meses */
+  function iso(x){ return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+  return {i:iso(ini), f:iso(fim), di:ini, df:fim, dias:Math.round((fim-ini)/86400000)+1};
+}
+function openAusencias(){
+  var ov=document.getElementById('ausOv');
+  ov.classList.add('open');
+  renderTimeline();
+}
+function closeAusencias(){ document.getElementById('ausOv').classList.remove('open'); }
+function renderTimeline(){
+  var r=tlRange(), h=hojeISO();
+  var box=document.getElementById('tlBody'); if(!box) return;
+
+  /* cabecalho de meses */
+  var meses=[], cur=new Date(r.di);
+  while(cur<=r.df){
+    var ult=new Date(cur.getFullYear(),cur.getMonth()+1,0);
+    var fimSeg=ult>r.df?r.df:ult;
+    var span=Math.round((fimSeg-cur)/86400000)+1;
+    meses.push({nome:cur.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).toUpperCase(),pct:span/r.dias*100});
+    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  }
+  var head='<div class="tl-head"><div class="tl-nm">MILITAR</div><div class="tl-track">';
+  meses.forEach(function(m){ head+='<div class="tl-mes" style="width:'+m.pct+'%">'+m.nome+'</div>'; });
+  head+='</div></div>';
+
+  /* filtra por secao selecionada na tela principal, se houver */
+  var lista=EFETIVO.filter(function(m){
+    if(state.pasta && m.rep!==state.pasta) return false;
+    var q=(document.getElementById('tlQ')||{}).value;
+    if(q){ q=q.toLowerCase(); if((m.nome+' '+m.rg+' '+m.funcao).toLowerCase().indexOf(q)<0) return false; }
+    return true;
+  });
+  var soAus=document.getElementById('tlSoAus')&&document.getElementById('tlSoAus').checked;
+  var rows='';
+  lista.forEach(function(m){
+    var as=ausDe(m.rg).filter(function(a){ return !(a.f<r.i||a.i>r.f); });
+    if(soAus&&!as.length) return;
+    var barras='';
+    as.forEach(function(a){
+      var ini=a.i<r.i?r.i:a.i, fim=a.f>r.f?r.f:a.f;
+      var off=diasEntre(r.i,ini)/r.dias*100;
+      var lar=(diasEntre(ini,fim)+1)/r.dias*100;
+      var lbl=ausRotulo(a);
+      barras+='<div class="tl-bar" style="left:'+off+'%;width:'+lar+'%;background:'+ausCor(a)+'" '+
+              'title="'+esc(lbl+' · '+isoBR(a.i)+' a '+isoBR(a.f))+'"'+
+              (ADM?' onclick="ausEditar(\''+m.rg+'\',\''+a.id+'\')"':'')+'>'+
+              '<span>'+esc(lbl)+'</span></div>';
+    });
+    /* marcador do dia de hoje */
+    var hoje=(h>=r.i&&h<=r.f)?'<div class="tl-hoje" style="left:'+(diasEntre(r.i,h)/r.dias*100)+'%"></div>':'';
+    rows+='<div class="tl-row">'+
+      '<div class="tl-nm" title="'+esc(m.nome)+'">'+
+        '<b>'+esc(nomeGuerra(m.nome))+'</b><span>'+esc(m.posto)+' · '+esc(m.rep)+'</span></div>'+
+      '<div class="tl-track">'+hoje+barras+
+        (ADM?'<button class="tl-add" onclick="ausNova(\''+m.rg+'\')" title="Lançar ausência">+</button>':'')+
+      '</div></div>';
+  });
+  if(!rows) rows='<div class="tl-vazio">Nenhum militar no filtro aplicado.</div>';
+  box.innerHTML=head+rows;
+
+  var per=document.getElementById('tlPeriodo');
+  if(per) per.textContent=isoBR(r.i)+'  —  '+isoBR(r.f);
+
+  /* resumo do topo */
+  var vig=0, prox=0;
+  EFETIVO.forEach(function(m){ if(ausVigente(m.rg)) vig++; if(ausProxima(m.rg)) prox++; });
+  var rs=document.getElementById('tlResumo');
+  if(rs) rs.innerHTML='<b>'+vig+'</b> indisponíveis hoje · <b>'+prox+'</b> com ausência programada · <b>'+
+                      (EFETIVO.length-vig)+'</b> disponíveis';
+}
+function tlNav(d){ TL_MES+=d; renderTimeline(); }
+
+/* legenda: so exibe os rotulos que o usuario tem permissao de ver */
+function renderLegenda(){
+  var el=document.getElementById('ausLeg'); if(!el) return;
+  if(!ADM){
+    el.innerHTML='<i><b style="background:#b45309"></b>Indisponível</i>'+
+                 '<i><b style="background:#6d28d9"></b>Curso</i>'+
+                 '<i><b style="background:#0f766e"></b>Missão</i>';
+    return;
+  }
+  var h='';
+  for(var k in AUS_TIPOS) h+='<i><b style="background:'+AUS_TIPOS[k].c+'"></b>'+AUS_TIPOS[k].r+'</i>';
+  el.innerHTML=h;
+}
+
+/* badge no botao AUSENCIAS: quantos estao indisponiveis hoje */
+function updateAusBadge(){
+  var el=document.getElementById('ausBadge'); if(!el) return;
+  var n=0; EFETIVO.forEach(function(m){ if(ausVigente(m.rg)) n++; });
+  el.textContent=n; el.classList.toggle('on',n>0);
+}
+
+/* ---------- formulario de ausencia ---------- */
+var AUS_CTX={rg:null,id:null};
+function ausNova(rg){ ausForm(rg,null); }
+function ausEditar(rg,id){ ausForm(rg,id); }
+function ausForm(rg,id){
+  if(!ADM){ admToast(); return; }
+  var m=EFETIVO.find(function(x){return x.rg===rg;}); if(!m) return;
+  AUS_CTX={rg:rg,id:id};
+  var a=id?ausDe(rg).filter(function(x){return x.id===id;})[0]:null;
+  var opts='';
+  for(var k in AUS_TIPOS) opts+='<option value="'+k+'"'+((a&&a.t===k)?' selected':'')+'>'+AUS_TIPOS[k].r+'</option>';
+  document.getElementById('ausFmTitle').textContent=(id?'Editar':'Lançar')+' ausência';
+  document.getElementById('ausFmWho').textContent=m.posto+' '+m.nome+' · RG '+m.rg;
+  document.getElementById('ausFmBody').innerHTML=
+    '<label>Tipo</label><select id="auT">'+opts+'</select>'+
+    '<div class="row2"><div><label>Início</label><input type="date" id="auI" value="'+(a?a.i:hojeISO())+'"></div>'+
+    '<div><label>Término</label><input type="date" id="auF" value="'+(a?a.f:hojeISO())+'"></div></div>'+
+    '<label>Observação <i>(visível apenas para administradores)</i></label>'+
+    '<textarea id="auO" rows="2">'+esc(a?a.obs:'')+'</textarea>'+
+    '<div class="aus-lgpd">🔒 O período fica visível no painel; o motivo e a observação permanecem restritos a administradores (LGPD, art. 5º, II).</div>'+
+    (id?'<button class="btn danger" onclick="ausExcluir()">Excluir este lançamento</button>':'');
+  document.getElementById('ausFmErr').classList.remove('on');
+  document.getElementById('ausFmOv').classList.add('open');
+}
+function ausFmSalvar(){
+  var t=document.getElementById('auT').value;
+  var i=document.getElementById('auI').value;
+  var f=document.getElementById('auF').value;
+  var o=document.getElementById('auO').value.trim();
+  var err=document.getElementById('ausFmErr');
+  if(!i||!f){ err.textContent='Informe início e término.'; err.classList.add('on'); return; }
+  if(f<i){ err.textContent='O término não pode ser anterior ao início.'; err.classList.add('on'); return; }
+  if(diasEntre(i,f)>730){ err.textContent='Período muito longo (máximo 2 anos).'; err.classList.add('on'); return; }
+  ausSalvar(AUS_CTX.rg,{t:t,i:i,f:f,obs:o},AUS_CTX.id);
+  document.getElementById('ausFmOv').classList.remove('open');
+  renderTimeline();
+  toast('Ausência registrada');
+}
+function ausExcluir(){
+  if(!AUS_CTX.id) return;
+  admConfirm('Excluir este lançamento de ausência?',function(){
+    ausRemover(AUS_CTX.rg,AUS_CTX.id);
+    document.getElementById('ausFmOv').classList.remove('open');
+    renderTimeline();
+    toast('Lançamento removido');
+  });
+}
+
+/* status textual considerando ausencia vigente */
+function ausStatusTxt(m){
+  var v=ausVigente(m.rg);
+  if(v) return ausRotulo(v)+' até '+isoBR(v.f);
+  return m.adido?'Adido':'Ativo';
+}
+/* bloco de ausencias no card individual — periodo sempre visivel,
+   motivo e observacao apenas para ADM */
+function ausBlocoHTML(rg){
+  var as=ausDe(rg), h=hojeISO();
+  var futuras=as.filter(function(a){ return a.f>=h; });
+  if(!futuras.length) return '<div class="adm-note" style="background:#f4f6f8;color:#647082;border:0;">Nenhuma ausência registrada.</div>';
+  /* aviso de ausencia iminente: ajuda a chefia a antecipar a cobertura */
+  var pr=ausProxima(rg), avi='';
+  if(pr){
+    var dd=diasEntre(h,pr.i);
+    if(dd>=0&&dd<=15) avi='<div class="adm-note" style="background:var(--amber-dim);color:var(--amber);border:0;">⏳ '+
+      esc(ausRotulo(pr))+' inicia em '+dd+' dia'+(dd===1?'':'s')+' ('+isoBR(pr.i)+').</div>';
+  }
+  return futuras.slice(0,6).map(function(a){
+    var vig=(a.i<=h&&a.f>=h);
+    return '<div class="aus-item"'+(ADM?' style="cursor:pointer" onclick="ausEditar(\''+rg+'\',\''+a.id+'\')"':'')+'>'+
+      '<span class="dot" style="background:'+ausCor(a)+'"></span>'+
+      '<div class="tx"><b>'+esc(ausRotulo(a))+(vig?' · vigente':'')+'</b>'+
+      '<span>'+isoBR(a.i)+' a '+isoBR(a.f)+' · '+(diasEntre(a.i,a.f)+1)+' dias'+
+      (ADM&&a.obs?' · '+esc(a.obs):'')+'</span></div></div>';
+  }).join('')+avi;
+}
+
 /* ============================================================
    SHEETS (detalhes de campos)
    ============================================================ */
@@ -3661,14 +4229,15 @@ function openFotoSheet(){
   document.getElementById('fotoInput').onchange=function(e){
     var f=e.target.files && e.target.files[0]; if(!f) return;
     if(!/^image\//.test(f.type)){ toast('Selecione um arquivo de imagem'); return; }
-    compressImage(f,function(data){
+    compressImage(f,function(data,thumb){
       if(!data){ toast('Falha ao processar a imagem'); return; }
       var rg=CUR.rg, nome=CUR.nome;
-      FOTOS[rg]=data; saveFotos();          /* fallback local imediato */
-      saveOvr(rg,{foto:data});              /* persiste no banco → pastas e TV */
-      logAcao('Foto anexada (card)', nome+' (RG '+rg+')');
-      toast('Foto anexada para '+nome.split(' ')[0]+' — sincronizada no painel');
-      closeSheet(); closeCard(); renderGrid(); openCard(rg);
+      toast('Enviando foto…');
+      salvarFoto(rg,data,thumb,function(ok){
+        logAcao('Foto anexada (card)', nome+' (RG '+rg+')');
+        toast('Foto anexada para '+nome.split(' ')[0]+(ok?' — sincronizada no painel':' — salva no modo local'));
+        closeSheet(); closeCard(); renderGrid(); openCard(rg);
+      });
     });
   };
 }
@@ -3758,12 +4327,23 @@ document.addEventListener('keydown',function(e){
    MÓDULO ADM · Firebase RTDB (spaei-digital-coe) · v ADM-1.0
    Login: RG | Senha: RG+SPAEI | Lista fechada: coeid/admins
    ============================================================ */
-var ADM=null, OVR={}, ADMIN_SET=null, FB_DB=null, FB_ON=false;
+var ADM=null, OVR={}, ADMIN_SET=null, FB_DB=null, FB_ST=null, FB_ON=false;
 var ADMIN_FALLBACK={'82061':true,'81440':true};
 var POSTOS=['Cel PM','TEN CEL PM','Maj PM','CAP PM','1°TEN PM','2°TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'];
 var SITUACOES=['','APTO A','APTO B','APTO C','FÉRIAS','LICENÇA','DISPENSA','BAIXADO','CURSO','MISSÃO'];
 
-function fotoDe(rg){ var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null; return (o&&o.foto)||FOTOS[rg]||null; }
+/* Leitura hibrida permanente: fotoUrl (Storage, formato novo) tem prioridade;
+   foto (base64 legado no RTDB) e FOTOS (localStorage) permanecem como fallback,
+   de modo que nenhuma foto some se a migracao falhar ou for parcial. */
+function fotoDe(rg){
+  var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
+  return (o&&(o.fotoUrl||o.foto))||FOTOS[rg]||null;
+}
+/* versao leve para a grade; cai na full se nao houver thumb */
+function thumbDe(rg){
+  var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
+  return (o&&(o.thumbUrl||o.fotoUrl||o.foto))||FOTOS[rg]||null;
+}
 
 /* ---------- Firebase ---------- */
 try{
@@ -3776,7 +4356,8 @@ try{
     appId:"1:441045974967:web:4c3e685b0ca218cb363232"
   });
   FB_DB=firebase.database();
-}catch(e){ FB_DB=null; }
+  try{ FB_ST=firebase.storage(); }catch(e2){ FB_ST=null; }
+}catch(e){ FB_DB=null; FB_ST=null; }
 
 try{ OVR=JSON.parse(localStorage.getItem('coeid_ovr_v1')||'{}'); }catch(e){ OVR={}; }
 function ovrLS(){ try{ localStorage.setItem('coeid_ovr_v1',JSON.stringify(OVR)); }catch(e){} }
@@ -3806,6 +4387,9 @@ function rebuildEfetivo(){
 function rerenderAll(){
   rebuildEfetivo();
   renderGrid();
+  if(typeof updateAusBadge==='function') updateAusBadge();
+  if(typeof renderLegenda==='function') renderLegenda();
+  if(document.getElementById('ausOv')&&document.getElementById('ausOv').classList.contains('open')&&typeof renderTimeline==='function') renderTimeline();
   if(ADM&&typeof updateVencBadge==='function') updateVencBadge();
   if(CUR){
     var rg=CUR.rg;
@@ -3815,9 +4399,18 @@ function rerenderAll(){
   }
 }
 
+/* Re-render coalescido: a v1.5 chamava rerenderAll() sincronamente a cada
+   evento do RTDB. Uma sequencia de edicoes do ADM disparava N re-renders
+   completos da grade. Agora agrupa em um unico frame. */
+var _rrTimer=null;
+function rerenderSoon(){
+  if(_rrTimer) clearTimeout(_rrTimer);
+  _rrTimer=setTimeout(function(){ _rrTimer=null; rerenderAll(); },140);
+}
 if(FB_DB){
   FB_DB.ref('coeid/ovr').on('value',function(snap){
-    FB_ON=true; OVR=snap.val()||{}; ovrLS(); rerenderAll();
+    FB_ON=true; OVR=snap.val()||{}; ovrLS(); rerenderSoon();
+    if(ADM) migrarFotosLegado();
   },function(){ FB_ON=false; });
   FB_DB.ref('coeid/admins').on('value',function(snap){ ADMIN_SET=snap.val()||null; });
   FB_DB.ref('.info/connected').on('value',function(snap){
@@ -3847,22 +4440,129 @@ function removeOvr(rg){
   if(FB_DB) FB_DB.ref('coeid/ovr/'+rg).remove().catch(function(){});
 }
 
+/* ============================================================
+   FOTOS NO FIREBASE STORAGE  (v2.0)
+   ------------------------------------------------------------
+   Motivo: na v1.5 a foto ia como base64 dentro de coeid/ovr no
+   Realtime Database. Como o app assina a arvore inteira de ovr,
+   QUALQUER edicao de QUALQUER campo reenviava todas as fotos
+   para todos os clientes conectados (TV inclusive). Era a causa
+   raiz da lentidao. Agora o binario vive no Storage e o RTDB
+   guarda apenas a URL (poucos bytes).
+   ============================================================ */
+var STORAGE_ERRO=false;
+
+function dataURLtoBlob(d){
+  try{
+    var a=d.split(','), mime=(a[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
+    var bin=atob(a[1]), n=bin.length, u=new Uint8Array(n);
+    while(n--) u[n]=bin.charCodeAt(n);
+    return new Blob([u],{type:mime});
+  }catch(e){ return null; }
+}
+
+/* sobe full + thumb; cb(erro, {fotoUrl, thumbUrl}) */
+function uploadFoto(rg, dataFull, dataThumb, cb){
+  if(!FB_ST){ cb('Storage indisponível'); return; }
+  var bFull=dataURLtoBlob(dataFull), bThumb=dataURLtoBlob(dataThumb||dataFull);
+  if(!bFull){ cb('Falha ao preparar a imagem'); return; }
+  var meta={contentType:'image/jpeg', cacheControl:'public,max-age=31536000'};
+  var refF=FB_ST.ref('coeid/fotos/'+rg+'.jpg');
+  var refT=FB_ST.ref('coeid/thumbs/'+rg+'.jpg');
+  refF.put(bFull,meta).then(function(){ return refF.getDownloadURL(); })
+  .then(function(uF){
+    return refT.put(bThumb,meta).then(function(){ return refT.getDownloadURL(); })
+      .then(function(uT){ return {fotoUrl:uF, thumbUrl:uT}; })
+      .catch(function(){ return {fotoUrl:uF, thumbUrl:uF}; });
+  })
+  .then(function(urls){ STORAGE_ERRO=false; cb(null,urls); })
+  .catch(function(err){
+    var c=(err&&err.code)||'';
+    if(/unauthorized|permission/i.test(c+' '+(err&&err.message||''))){
+      STORAGE_ERRO=true;
+      cb('Storage sem permissão de escrita — as regras do bucket precisam ser liberadas. A foto foi salva no modo antigo.');
+    } else cb('Falha no envio da foto: '+(err&&err.message||'erro desconhecido'));
+  });
+}
+
+/* Grava a foto: tenta Storage; se falhar, cai no formato legado (base64)
+   para nunca perder o anexo do usuario. */
+function salvarFoto(rg, dataFull, dataThumb, done){
+  FOTOS[rg]=dataThumb||dataFull; saveFotos();     /* cache local imediato */
+  uploadFoto(rg, dataFull, dataThumb, function(err,urls){
+    if(err){
+      saveOvr(rg,{foto:dataFull});                 /* fallback legado */
+      toast(err);
+      if(done) done(false);
+      return;
+    }
+    saveOvr(rg,{fotoUrl:urls.fotoUrl, thumbUrl:urls.thumbUrl, foto:null});
+    if(done) done(true);
+  });
+}
+
+/* MIGRACAO INCREMENTAL E IDEMPOTENTE do base64 legado para o Storage.
+   Roda so para ADM, uma foto por vez, retomavel. Se o Storage estiver
+   bloqueado, aborta silenciosamente e o app segue lendo o base64. */
+var MIG_ON=false, MIG_FEITO={};
+try{ MIG_FEITO=JSON.parse(localStorage.getItem('coeid_mig_v2')||'{}'); }catch(e){ MIG_FEITO={}; }
+function migrarFotosLegado(){
+  if(MIG_ON||!FB_ST||!ADM||STORAGE_ERRO) return;
+  var pend=Object.keys(OVR).filter(function(rg){
+    var o=OVR[rg]; return o && o.foto && !o.fotoUrl && !MIG_FEITO[rg];
+  });
+  if(!pend.length){ migBar(0,0); return; }
+  MIG_ON=true;
+  var tot=pend.length, i=0;
+  (function passo(){
+    if(i>=tot||STORAGE_ERRO){ MIG_ON=false; migBar(0,0); if(!STORAGE_ERRO&&tot) toast('Fotos migradas para o Storage ('+i+'/'+tot+')'); return; }
+    var rg=pend[i]; migBar(i+1,tot);
+    uploadFoto(rg, OVR[rg].foto, OVR[rg].foto, function(err,urls){
+      if(!err&&urls){
+        MIG_FEITO[rg]=1;
+        try{ localStorage.setItem('coeid_mig_v2',JSON.stringify(MIG_FEITO)); }catch(e){}
+        if(FB_DB) FB_DB.ref('coeid/ovr/'+rg).update({fotoUrl:urls.fotoUrl,thumbUrl:urls.thumbUrl,foto:null}).catch(function(){});
+      } else if(STORAGE_ERRO){ toast(err); }
+      i++; setTimeout(passo, 120);   /* espacado: nao trava a UI */
+    });
+  })();
+}
+function migBar(n,tot){
+  var el=document.getElementById('migBar'); if(!el) return;
+  if(!tot){ el.classList.remove('show'); return; }
+  el.classList.add('show');
+  el.querySelector('b').textContent='Migrando fotos para o Storage · '+n+'/'+tot;
+  el.querySelector('.migfill').style.width=Math.round(n/tot*100)+'%';
+}
+
 /* ---------- Compressão de imagem (3×4, JPEG) ---------- */
+/* Gera DUAS versoes: full (card aberto) e thumb (grade).
+   A grade com 142 cards usava a imagem full em miniatura de ~150px —
+   desperdicio de memoria e de decode. cb(full, thumb). */
+function escalaJPEG(img,maxH,q){
+  var sc=Math.min(1,maxH/img.height);
+  var w=Math.max(1,Math.round(img.width*sc)), h=Math.max(1,Math.round(img.height*sc));
+  var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  var cx=cv.getContext('2d');
+  cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+  cx.drawImage(img,0,0,w,h);
+  return cv.toDataURL('image/jpeg',q);
+}
 function compressImage(file,cb){
   var rd=new FileReader();
   rd.onload=function(){
     var img=new Image();
     img.onload=function(){
-      var maxH=640, sc=Math.min(1,maxH/img.height);
-      var w=Math.round(img.width*sc), h=Math.round(img.height*sc);
-      var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-      cv.getContext('2d').drawImage(img,0,0,w,h);
-      cb(cv.toDataURL('image/jpeg',0.82));
+      try{
+        var full=escalaJPEG(img,760,0.82);
+        var thumb=escalaJPEG(img,300,0.74);
+        cb(full,thumb);
+      }catch(e){ cb(null,null); }
     };
-    img.onerror=function(){ cb(null); };
+    img.onerror=function(){ cb(null,null); };
     img.src=rd.result;
   };
-  rd.onerror=function(){ cb(null); };
+  rd.onerror=function(){ cb(null,null); };
   rd.readAsDataURL(file);
 }
 
@@ -3953,10 +4653,10 @@ function admConfirmYes(){
 }
 
 /* ---------- Formulário criar/editar militar ---------- */
-var FORM_RG=null, FORM_FOTO=null;
+var FORM_RG=null, FORM_FOTO=null, FORM_THUMB=null;
 function admOpenForm(rg){
   if(!ADM){ admToast(); return; }
-  FORM_RG=rg; FORM_FOTO=null;
+  FORM_RG=rg; FORM_FOTO=null; FORM_THUMB=null;
   var m=rg?EFETIVO.find(function(x){return x.rg===rg;}):null;
   document.getElementById('afTitle').textContent=m?'Editar militar':'Novo militar';
   document.getElementById('afNome').value=m?m.nome:'';
@@ -3982,10 +4682,10 @@ function admFormFoto(){
   var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
   inp.onchange=function(e){
     var f=e.target.files&&e.target.files[0]; if(!f) return;
-    compressImage(f,function(data){
+    compressImage(f,function(data,thumb){
       if(!data){ toast('Falha ao processar a imagem'); return; }
-      FORM_FOTO=data;
-      document.getElementById('afPv').innerHTML='<img src="'+data+'">';
+      FORM_FOTO=data; FORM_THUMB=thumb||data;
+      document.getElementById('afPv').innerHTML='<img src="'+(thumb||data)+'">';
     });
   };
   inp.click();
@@ -4006,8 +4706,10 @@ function admFormSave(){
   var repSel=document.getElementById('afRep').value;
   var patch={nome:nome,posto:posto,funcao:func||'SEM FUNÇÃO',situacao:sit,adido:adido,rep:repSel||null};
   if(!FORM_RG) patch.novo=true;
-  if(FORM_FOTO) patch.foto=FORM_FOTO;
+  var _fotoPend=FORM_FOTO?{full:FORM_FOTO,thumb:FORM_THUMB}:null;
   saveOvr(rg,patch);
+  if(_fotoPend) salvarFoto(rg,_fotoPend.full,_fotoPend.thumb);
+  FORM_FOTO=null; FORM_THUMB=null;
   logAcao(FORM_RG?'Editou militar':'Cadastrou militar', posto+' '+nome+' (RG '+rg+')');
   document.getElementById('admFormOv').classList.remove('open');
   toast((FORM_RG?'Dados atualizados: ':'Militar cadastrado: ')+nome.split(' ')[0]);
@@ -4328,12 +5030,16 @@ function pmUploadMode(rg){
     var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='user';
     inp.onchange=function(e){
       var file=e.target.files&&e.target.files[0]; if(!file) return;
-      compressImage(file,function(data){
+      compressImage(file,function(data,thumb){
         if(!data){ toast('Falha ao processar a imagem'); return; }
-        saveOvr(rg,{foto:data});
-        logAcao('Foto enviada (link individual)','RG '+rg);
-        document.getElementById('pmPv').innerHTML='<img src="'+data+'">';
-        document.getElementById('pmDone').classList.add('on');
+        var btn=document.getElementById('pmBtn');
+        if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
+        salvarFoto(rg,data,thumb,function(){
+          logAcao('Foto enviada (link individual)','RG '+rg);
+          document.getElementById('pmPv').innerHTML='<img src="'+(thumb||data)+'">';
+          document.getElementById('pmDone').classList.add('on');
+          if(btn){ btn.disabled=false; btn.textContent='📷 Enviar / trocar foto 3×4'; }
+        });
       });
     };
     inp.click();
@@ -4402,6 +5108,28 @@ function pmUploadMode(rg){
     var s=sessionStorage.getItem('coeid_adm');
     if(s){ ADM=s; document.getElementById('admBar').classList.add('on'); syncAdmBtn(); }
   }catch(e){}
+
+  /* densidade: rotulo inicial + fechamento de overlays por clique no fundo */
+  var _dl=document.getElementById('densLbl'); if(_dl) _dl.textContent=Math.round(DENS*100)+'%';
+  ['ausOv','ausFmOv'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.addEventListener('click',function(e){ if(e.target===el) el.classList.remove('open'); });
+  });
+  /* ESC fecha os overlays de ausencias */
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    var f=document.getElementById('ausFmOv');
+    if(f&&f.classList.contains('open')){ f.classList.remove('open'); return; }
+    var a=document.getElementById('ausOv');
+    if(a&&a.classList.contains('open')) a.classList.remove('open');
+  });
+
+  /* Page Visibility: com a aba/TV em segundo plano nao ha motivo para
+     manter a rolagem automatica consumindo CPU. Religa ao voltar. */
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){ if(tvRAF){ cancelAnimationFrame(tvRAF); tvRAF=null; } }
+    else if(tvOn && !tvRAF){ tvLoop(); }
+  });
 
   rerenderAll();
 
