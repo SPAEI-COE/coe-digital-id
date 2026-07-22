@@ -3135,7 +3135,6 @@ var qrcode = function() {
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script>
 /* ============================================================
    COE DIGITAL ID · PAINEL DO EFETIVO — TV 56"
@@ -3227,7 +3226,7 @@ function renderStats(list){
     '<div class="stat" data-act="secoes" title="Voltar às pastas por seção"><b>'+nSec+'</b><span>Seções</span></div>'+
     '<div class="stat" data-act="total" title="Ver o efetivo completo em grade"><b>'+EFETIVO.length+'</b><span>Efetivo total</span></div>'+
     '<div class="stat'+(state.adidos?' on':'')+'" data-act="adidos" title="Filtrar apenas os adidos"><b>'+adidos+'</b><span>Adidos</span></div>'+
-    '<div class="stat'+(state.semFoto?' on':'')+'" data-act="fotos" title="Filtrar militares sem foto anexada"><b>'+EFETIVO.filter(function(m){return !fotoDe(m.rg);}).length+'</b><span>Sem foto</span></div>'+
+    '<div class="stat'+(state.semFoto?' on':'')+'" data-act="fotos" title="Filtrar militares sem foto anexada"><b>'+EFETIVO.filter(function(m){return !temFoto(m.rg);}).length+'</b><span>Sem foto</span></div>'+
     '<div class="stat" data-act="exib" title="Militares atualmente em exibição" style="cursor:default;"><b>'+list.length+'</b><span>Em exibição</span></div>';
   el.querySelectorAll('.stat').forEach(function(s){
     var act=s.getAttribute('data-act');
@@ -3379,7 +3378,7 @@ function filtered(){
   var rep = (state.view==='pastas') ? (state.pasta||'TODOS') : state.rep;
   return EFETIVO.filter(function(m){
     if(state.adidos && !m.adido) return false;
-    if(state.semFoto && fotoDe(m.rg)) return false;
+    if(state.semFoto && temFoto(m.rg)) return false;
     if(rep!=='TODOS' && m.rep!==rep) return false;
     if(state.q){
       var alvo=(m.nome+' '+m.rg+' '+m.funcao+' '+m.posto+' '+m.rep).toLowerCase();
@@ -3427,8 +3426,8 @@ function syncBars(){
 var FOLDER_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>';
 function folderHTML(rep, list){
   var cor=repColor(rep);
-  var comFoto=list.filter(function(m){return !!fotoDe(m.rg);});
-  var prevList=comFoto.concat(list.filter(function(m){return !fotoDe(m.rg);})).slice(0,6);
+  var comFoto=list.filter(function(m){return temFoto(m.rg);});
+  var prevList=comFoto.concat(list.filter(function(m){return !temFoto(m.rg);})).slice(0,6);
   var prev=prevList.map(function(m){
     var f=thumbDe(m.rg);
     return '<div class="fd-av">'+(f?'<img src="'+f+'" alt="" loading="lazy" decoding="async">':esc(initials(m.nome)))+'</div>';
@@ -4327,22 +4326,107 @@ document.addEventListener('keydown',function(e){
    MÓDULO ADM · Firebase RTDB (spaei-digital-coe) · v ADM-1.0
    Login: RG | Senha: RG+SPAEI | Lista fechada: coeid/admins
    ============================================================ */
-var ADM=null, OVR={}, ADMIN_SET=null, FB_DB=null, FB_ST=null, FB_ON=false;
+var ADM=null, OVR={}, ADMIN_SET=null, FB_DB=null, FB_ON=false;
 var ADMIN_FALLBACK={'82061':true,'81440':true};
 var POSTOS=['Cel PM','TEN CEL PM','Maj PM','CAP PM','1°TEN PM','2°TEN PM','SUB TEN PM','1º SGT PM','2º SGT PM','3º SGT PM','CB PM','SD PM'];
 var SITUACOES=['','APTO A','APTO B','APTO C','FÉRIAS','LICENÇA','DISPENSA','BAIXADO','CURSO','MISSÃO'];
 
-/* Leitura hibrida permanente: fotoUrl (Storage, formato novo) tem prioridade;
-   foto (base64 legado no RTDB) e FOTOS (localStorage) permanecem como fallback,
-   de modo que nenhuma foto some se a migracao falhar ou for parcial. */
-function fotoDe(rg){
-  var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
-  return (o&&(o.fotoUrl||o.foto))||FOTOS[rg]||null;
+/* ============================================================
+   FOTOS — ARVORE SEPARADA NO REALTIME DATABASE  (v2.0)
+   ------------------------------------------------------------
+   O problema da v1.5 nao era o formato base64: era a foto morar
+   dentro de coeid/ovr, arvore que o app assina INTEIRA. Qualquer
+   edicao de qualquer campo reenviava todas as 142 fotos para
+   todos os aparelhos conectados, TV inclusive.
+
+   Agora as fotos vivem em coeid/fotos/<rg>, arvore que o app NAO
+   assina. Sao lidas sob demanda (once), guardadas em memoria e no
+   localStorage, e nunca mais baixadas. Editar a funcao de um
+   militar deixou de tocar em qualquer foto.
+
+   Estrutura: coeid/fotos/<rg> = { t: <thumb base64>, f: <full base64> }
+   Mantem-se leitura do formato legado (coeid/ovr/<rg>/foto).
+   ============================================================ */
+var FOTO_CACHE={};    /* rg -> {t,f}  em memoria */
+var FOTO_PEND={};     /* rg -> true   busca em andamento */
+try{ FOTO_CACHE=JSON.parse(localStorage.getItem('coeid_fotocache_v2')||'{}'); }catch(e){ FOTO_CACHE={}; }
+var _fcT=null;
+function fotoCacheLS(){
+  if(_fcT) clearTimeout(_fcT);
+  _fcT=setTimeout(function(){
+    _fcT=null;
+    var leve={};
+    for(var k in FOTO_CACHE){ if(FOTO_CACHE[k]&&FOTO_CACHE[k].t) leve[k]={t:FOTO_CACHE[k].t}; }
+    try{ localStorage.setItem('coeid_fotocache_v2',JSON.stringify(leve)); }
+    catch(e){ podarCache(); }
+  },600);
 }
-/* versao leve para a grade; cai na full se nao houver thumb */
-function thumbDe(rg){
+/* localStorage costuma ter ~5 MB. Se estourar, descarta as versoes full
+   (mantendo as thumbs, que sao o que a grade precisa) e tenta de novo. */
+function podarCache(){
+  try{
+    for(var k in FOTO_CACHE){ if(FOTO_CACHE[k]&&FOTO_CACHE[k].f) delete FOTO_CACHE[k].f; }
+    localStorage.setItem('coeid_fotocache_v2',JSON.stringify(FOTO_CACHE));
+  }catch(e){
+    try{ localStorage.removeItem('coeid_fotocache_v2'); }catch(e2){}
+  }
+}
+/* busca sob demanda; ao chegar, atualiza so aquele card (sem re-render geral) */
+function buscarFoto(rg){
+  if(!FB_DB||FOTO_PEND[rg]) return;
+  FOTO_PEND[rg]=true;
+  FB_DB.ref('coeid/fotos/'+rg).once('value').then(function(snap){
+    var v=snap.val();
+    delete FOTO_PEND[rg];
+    if(!v) return;
+    FOTO_CACHE[rg]={t:v.t||v.f||null, f:v.f||v.t||null};
+    /* no localStorage persiste apenas a thumb (a grade e o que precisa
+       estar instantaneo); a full fica so em memoria nesta sessao */
+    fotoCacheLS();
+    pintarFoto(rg);
+  }).catch(function(){ delete FOTO_PEND[rg]; });
+}
+/* injeta a foto recem-chegada nos elementos ja renderizados */
+function pintarFoto(rg){
+  var c=FOTO_CACHE[rg]; if(!c) return;
+  var src=c.t||c.f; if(!src) return;
+  document.querySelectorAll('.mc[data-rg="'+rg+'"] .mc-photo').forEach(function(ph){
+    if(ph.querySelector('img')) return;
+    ph.innerHTML='<img src="'+src+'" alt="" decoding="async">';
+  });
+  if(CUR&&CUR.rg===rg){
+    var pf=document.querySelector('.photo-frame');
+    if(pf&&!pf.querySelector('img')){
+      var full=c.f||c.t;
+      pf.insertAdjacentHTML('beforeend','<img src="'+full+'" alt="">');
+      var tag=pf.querySelector('.pf-init'), tg2=pf.querySelector('.pf-tag');
+      if(tag) tag.remove(); if(tg2) tg2.remove();
+    }
+  }
+}
+/* foto em alta (card aberto) */
+function fotoDe(rg){
+  var c=FOTO_CACHE[rg];
+  if(c&&(c.f||c.t)) return c.f||c.t;
   var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
-  return (o&&(o.thumbUrl||o.fotoUrl||o.foto))||FOTOS[rg]||null;
+  if(o&&o.foto) return o.foto;              /* legado */
+  buscarFoto(rg);
+  return FOTOS[rg]||null;
+}
+/* miniatura (grade e pastas) */
+function thumbDe(rg){
+  var c=FOTO_CACHE[rg];
+  if(c&&(c.t||c.f)) return c.t||c.f;
+  var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
+  if(o&&o.foto) return o.foto;              /* legado */
+  buscarFoto(rg);
+  return FOTOS[rg]||null;
+}
+/* indice leve de quem tem foto — assinado no lugar da arvore de imagens.
+   Alguns bytes por militar, em vez de dezenas de KB. */
+var FOTO_IDX={};
+function temFoto(rg){
+  return !!(FOTO_IDX[rg]||FOTO_CACHE[rg]||(OVR[rg]&&OVR[rg].foto)||FOTOS[rg]);
 }
 
 /* ---------- Firebase ---------- */
@@ -4356,8 +4440,7 @@ try{
     appId:"1:441045974967:web:4c3e685b0ca218cb363232"
   });
   FB_DB=firebase.database();
-  try{ FB_ST=firebase.storage(); }catch(e2){ FB_ST=null; }
-}catch(e){ FB_DB=null; FB_ST=null; }
+}catch(e){ FB_DB=null; }
 
 try{ OVR=JSON.parse(localStorage.getItem('coeid_ovr_v1')||'{}'); }catch(e){ OVR={}; }
 function ovrLS(){ try{ localStorage.setItem('coeid_ovr_v1',JSON.stringify(OVR)); }catch(e){} }
@@ -4413,6 +4496,12 @@ if(FB_DB){
     if(ADM) migrarFotosLegado();
   },function(){ FB_ON=false; });
   FB_DB.ref('coeid/admins').on('value',function(snap){ ADMIN_SET=snap.val()||null; });
+  /* indice de fotos: alguns bytes por militar. Diz QUEM tem foto sem
+     baixar imagem nenhuma — as imagens vem sob demanda em buscarFoto(). */
+  FB_DB.ref('coeid/fotoidx').on('value',function(snap){
+    FOTO_IDX=snap.val()||{};
+    rerenderSoon();
+  });
   FB_DB.ref('.info/connected').on('value',function(snap){
     var on=!!snap.val(); FB_ON=on;
     var el=document.getElementById('connDot'); if(!el) return;
@@ -4441,89 +4530,81 @@ function removeOvr(rg){
 }
 
 /* ============================================================
-   FOTOS NO FIREBASE STORAGE  (v2.0)
+   GRAVACAO DE FOTOS  (v2.0 — sem Cloud Storage)
    ------------------------------------------------------------
-   Motivo: na v1.5 a foto ia como base64 dentro de coeid/ovr no
-   Realtime Database. Como o app assina a arvore inteira de ovr,
-   QUALQUER edicao de QUALQUER campo reenviava todas as fotos
-   para todos os clientes conectados (TV inclusive). Era a causa
-   raiz da lentidao. Agora o binario vive no Storage e o RTDB
-   guarda apenas a URL (poucos bytes).
+   O Cloud Storage passou a exigir plano pago (Blaze) em fev/2026.
+   Este projeto permanece no plano gratuito (Spark), entao as fotos
+   sao gravadas no proprio Realtime Database, porem em arvore
+   SEPARADA (coeid/fotos/<rg>) que o app nao assina — que era o
+   ponto real do problema de performance.
+
+   Grava tambem coeid/fotoidx/<rg> = 1, indice leve usado para
+   saber quem tem foto sem precisar carregar imagem alguma.
    ============================================================ */
-var STORAGE_ERRO=false;
 
-function dataURLtoBlob(d){
-  try{
-    var a=d.split(','), mime=(a[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
-    var bin=atob(a[1]), n=bin.length, u=new Uint8Array(n);
-    while(n--) u[n]=bin.charCodeAt(n);
-    return new Blob([u],{type:mime});
-  }catch(e){ return null; }
-}
-
-/* sobe full + thumb; cb(erro, {fotoUrl, thumbUrl}) */
-function uploadFoto(rg, dataFull, dataThumb, cb){
-  if(!FB_ST){ cb('Storage indisponível'); return; }
-  var bFull=dataURLtoBlob(dataFull), bThumb=dataURLtoBlob(dataThumb||dataFull);
-  if(!bFull){ cb('Falha ao preparar a imagem'); return; }
-  var meta={contentType:'image/jpeg', cacheControl:'public,max-age=31536000'};
-  var refF=FB_ST.ref('coeid/fotos/'+rg+'.jpg');
-  var refT=FB_ST.ref('coeid/thumbs/'+rg+'.jpg');
-  refF.put(bFull,meta).then(function(){ return refF.getDownloadURL(); })
-  .then(function(uF){
-    return refT.put(bThumb,meta).then(function(){ return refT.getDownloadURL(); })
-      .then(function(uT){ return {fotoUrl:uF, thumbUrl:uT}; })
-      .catch(function(){ return {fotoUrl:uF, thumbUrl:uF}; });
-  })
-  .then(function(urls){ STORAGE_ERRO=false; cb(null,urls); })
-  .catch(function(err){
-    var c=(err&&err.code)||'';
-    if(/unauthorized|permission/i.test(c+' '+(err&&err.message||''))){
-      STORAGE_ERRO=true;
-      cb('Storage sem permissão de escrita — as regras do bucket precisam ser liberadas. A foto foi salva no modo antigo.');
-    } else cb('Falha no envio da foto: '+(err&&err.message||'erro desconhecido'));
-  });
-}
-
-/* Grava a foto: tenta Storage; se falhar, cai no formato legado (base64)
-   para nunca perder o anexo do usuario. */
+/* Grava thumb + full na arvore separada, atualiza cache e indice. */
 function salvarFoto(rg, dataFull, dataThumb, done){
-  FOTOS[rg]=dataThumb||dataFull; saveFotos();     /* cache local imediato */
-  uploadFoto(rg, dataFull, dataThumb, function(err,urls){
-    if(err){
-      saveOvr(rg,{foto:dataFull});                 /* fallback legado */
-      toast(err);
-      if(done) done(false);
-      return;
+  var thumb=dataThumb||dataFull, full=dataFull||dataThumb;
+  FOTO_CACHE[rg]={t:thumb, f:full};
+  fotoCacheLS();
+  FOTOS[rg]=thumb; saveFotos();
+  FOTO_IDX[rg]=1;
+  if(!FB_DB){
+    toast('Sem conexão — foto salva apenas neste dispositivo');
+    if(done) done(false); return;
+  }
+  FB_DB.ref('coeid/fotos/'+rg).set({t:thumb, f:full}).then(function(){
+    return FB_DB.ref('coeid/fotoidx/'+rg).set(1);
+  }).then(function(){
+    /* limpa o campo legado dentro de ovr, se existir: e o que fazia
+       a foto trafegar junto com os demais dados a cada edicao */
+    if(OVR[rg]&&OVR[rg].foto){
+      FB_DB.ref('coeid/ovr/'+rg+'/foto').remove().catch(function(){});
+      delete OVR[rg].foto; ovrLS();
     }
-    saveOvr(rg,{fotoUrl:urls.fotoUrl, thumbUrl:urls.thumbUrl, foto:null});
+    rerenderSoon();
     if(done) done(true);
+  }).catch(function(){
+    toast('Sem conexão — foto salva apenas neste dispositivo');
+    if(done) done(false);
   });
 }
 
-/* MIGRACAO INCREMENTAL E IDEMPOTENTE do base64 legado para o Storage.
-   Roda so para ADM, uma foto por vez, retomavel. Se o Storage estiver
-   bloqueado, aborta silenciosamente e o app segue lendo o base64. */
+/* MIGRACAO das fotos legadas (dentro de coeid/ovr) para a arvore
+   separada. Incremental, idempotente e retomavel: processa uma por
+   vez e marca as concluidas. Roda so para ADM. */
 var MIG_ON=false, MIG_FEITO={};
 try{ MIG_FEITO=JSON.parse(localStorage.getItem('coeid_mig_v2')||'{}'); }catch(e){ MIG_FEITO={}; }
 function migrarFotosLegado(){
-  if(MIG_ON||!FB_ST||!ADM||STORAGE_ERRO) return;
+  if(MIG_ON||!FB_DB||!ADM) return;
   var pend=Object.keys(OVR).filter(function(rg){
-    var o=OVR[rg]; return o && o.foto && !o.fotoUrl && !MIG_FEITO[rg];
+    var o=OVR[rg]; return o && o.foto && !MIG_FEITO[rg];
   });
   if(!pend.length){ migBar(0,0); return; }
   MIG_ON=true;
-  var tot=pend.length, i=0;
+  var tot=pend.length, i=0, ok=0;
   (function passo(){
-    if(i>=tot||STORAGE_ERRO){ MIG_ON=false; migBar(0,0); if(!STORAGE_ERRO&&tot) toast('Fotos migradas para o Storage ('+i+'/'+tot+')'); return; }
+    if(i>=tot){
+      MIG_ON=false; migBar(0,0);
+      if(ok) toast('Fotos reorganizadas ('+ok+'/'+tot+') — painel mais rápido');
+      return;
+    }
     var rg=pend[i]; migBar(i+1,tot);
-    uploadFoto(rg, OVR[rg].foto, OVR[rg].foto, function(err,urls){
-      if(!err&&urls){
-        MIG_FEITO[rg]=1;
-        try{ localStorage.setItem('coeid_mig_v2',JSON.stringify(MIG_FEITO)); }catch(e){}
-        if(FB_DB) FB_DB.ref('coeid/ovr/'+rg).update({fotoUrl:urls.fotoUrl,thumbUrl:urls.thumbUrl,foto:null}).catch(function(){});
-      } else if(STORAGE_ERRO){ toast(err); }
-      i++; setTimeout(passo, 120);   /* espacado: nao trava a UI */
+    var b64=OVR[rg].foto;
+    FB_DB.ref('coeid/fotos/'+rg).set({t:b64, f:b64}).then(function(){
+      return FB_DB.ref('coeid/fotoidx/'+rg).set(1);
+    }).then(function(){
+      return FB_DB.ref('coeid/ovr/'+rg+'/foto').remove();
+    }).then(function(){
+      MIG_FEITO[rg]=1; ok++;
+      FOTO_CACHE[rg]={t:b64, f:b64}; FOTO_IDX[rg]=1;
+      if(OVR[rg]) delete OVR[rg].foto;
+      try{ localStorage.setItem('coeid_mig_v2',JSON.stringify(MIG_FEITO)); }catch(e){}
+      fotoCacheLS(); ovrLS();
+    }).catch(function(){
+      /* falha isolada nao aborta o processo: tenta a proxima */
+    }).then(function(){
+      i++; setTimeout(passo,120);
     });
   })();
 }
@@ -4531,7 +4612,7 @@ function migBar(n,tot){
   var el=document.getElementById('migBar'); if(!el) return;
   if(!tot){ el.classList.remove('show'); return; }
   el.classList.add('show');
-  el.querySelector('b').textContent='Migrando fotos para o Storage · '+n+'/'+tot;
+  el.querySelector('b').textContent='Reorganizando fotos · '+n+'/'+tot;
   el.querySelector('.migfill').style.width=Math.round(n/tot*100)+'%';
 }
 
@@ -4554,8 +4635,8 @@ function compressImage(file,cb){
     var img=new Image();
     img.onload=function(){
       try{
-        var full=escalaJPEG(img,760,0.82);
-        var thumb=escalaJPEG(img,300,0.74);
+        var full=escalaJPEG(img,700,0.80);
+        var thumb=escalaJPEG(img,240,0.68);
         cb(full,thumb);
       }catch(e){ cb(null,null); }
     };
