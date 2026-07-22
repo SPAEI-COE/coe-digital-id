@@ -3854,14 +3854,25 @@ function sizeFC(){
   fc.style.height=Math.floor(h)+'px';
   fc.style.width=Math.floor(w)+'px';
 }
+/* FIX (V7): existiam DOIS listeners de 'resize' concorrentes — um debounced
+   (180ms) e outro chamando renderGrid() em TODO evento de resize, sem
+   debounce nenhum. Durante um redimensionamento ativo de janela (arrastar
+   borda no notebook, recolher/mostrar a barra do navegador, mudar zoom),
+   o segundo listener disparava dezenas de re-renders completos da grade
+   por segundo — cada um recalculando computeCols() a partir de uma largura
+   do container ainda em transição. Resultado: frames com contagem de
+   colunas inconsistente entre um re-render e o seguinte, o que aparenta
+   cards "subindo" uns sobre os outros caso alguém fotografe a tela nesse
+   instante. Unificado em um único listener debounced que faz as duas
+   coisas (grade + redimensionamento do card aberto). */
 var _rzT=null;
 window.addEventListener('resize',function(){
   if(_rzT) clearTimeout(_rzT);
-  _rzT=setTimeout(function(){ _rzT=null; if(typeof renderGrid==='function') renderGrid(); },180);
-});
-window.addEventListener('resize',function(){
-  renderGrid();
-  if(document.getElementById('cardOv').classList.contains('open')){ sizeFC(); autoFitFC(); }
+  _rzT=setTimeout(function(){
+    _rzT=null;
+    if(typeof renderGrid==='function') renderGrid();
+    if(document.getElementById('cardOv').classList.contains('open')){ sizeFC(); autoFitFC(); }
+  },180);
 });
 
 function openCard(rg){
@@ -3948,7 +3959,7 @@ function diasEntre(a,b){
 }
 /* lista de ausencias de um militar, ordenada por inicio */
 function ausDe(rg){
-  var o=OVR[rg]; if(!o||!o.aus) return [];
+  var o=(OVR||{})[rg]; if(!o||!o.aus) return [];
   var out=[];
   for(var id in o.aus){
     var a=o.aus[id];
@@ -4301,6 +4312,21 @@ document.addEventListener('keydown',function(e){
   else if(state.view==='pastas' && state.pasta) closePasta();
 });
 
+/* ---------- FIX CRÍTICO (v2.1): pré-inicialização de estado ----------
+   OVR, FOTO_CACHE e FOTO_IDX só eram declaradas/atribuídas mais abaixo
+   (bloco "MÓDULO ADM"), mas boot() já chama renderGrid() de forma
+   síncrona ANTES desse bloco rodar. Como renderFolders()/miniCardHTML()
+   chamam ausVigente()/temFoto(), que leem OVR[rg]/FOTO_IDX[rg]/
+   FOTO_CACHE[rg], essas variáveis ainda estavam 'undefined' (apenas
+   hoisted) nesse instante — qualquer leitura de propriedade lançava
+   TypeError não tratado, o que abortava a execução do <script> INTEIRO
+   a partir daquele ponto. Resultado: nenhum card era desenhado e todo
+   o código posterior (Firebase, ADM, fotos, rerenderAll()) nunca
+   chegava a executar. Basta garantir que essas variáveis já existam
+   como objetos antes do boot rodar; as atribuições originais mais
+   abaixo continuam existindo e apenas as populam de verdade depois. */
+var OVR={}, FOTO_CACHE={}, FOTO_IDX={};
+
 /* ---------- boot ---------- */
 (function boot(){
   document.getElementById('hdrCrest').src=BRASAO;
@@ -4386,12 +4412,15 @@ function buscarFoto(rg){
     pintarFoto(rg);
   }).catch(function(){ delete FOTO_PEND[rg]; });
 }
-/* injeta a foto recem-chegada nos elementos ja renderizados */
-function pintarFoto(rg){
+/* injeta a foto recem-chegada nos elementos ja renderizados.
+   force=true repinta mesmo se ja houver <img> (usado por salvarFoto, onde
+   sabemos que e uma foto nova/trocada); sem force, mantem a guarda antiga
+   (evita disputa entre chamadas assincronas concorrentes de buscarFoto). */
+function pintarFoto(rg,force){
   var c=FOTO_CACHE[rg]; if(!c) return;
   var src=c.t||c.f; if(!src) return;
   document.querySelectorAll('.mc[data-rg="'+rg+'"] .mc-photo').forEach(function(ph){
-    if(ph.querySelector('img')) return;
+    if(!force && ph.querySelector('img')) return;
     ph.innerHTML='<img src="'+src+'" alt="" decoding="async">';
   });
   if(CUR&&CUR.rg===rg){
@@ -4406,7 +4435,7 @@ function pintarFoto(rg){
 }
 /* foto em alta (card aberto) */
 function fotoDe(rg){
-  var c=FOTO_CACHE[rg];
+  var c=(FOTO_CACHE||{})[rg];
   if(c&&(c.f||c.t)) return c.f||c.t;
   var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
   if(o&&o.foto) return o.foto;              /* legado */
@@ -4415,7 +4444,7 @@ function fotoDe(rg){
 }
 /* miniatura (grade e pastas) */
 function thumbDe(rg){
-  var c=FOTO_CACHE[rg];
+  var c=(FOTO_CACHE||{})[rg];
   if(c&&(c.t||c.f)) return c.t||c.f;
   var o=(typeof OVR==='object'&&OVR)?OVR[rg]:null;
   if(o&&o.foto) return o.foto;              /* legado */
@@ -4426,7 +4455,7 @@ function thumbDe(rg){
    Alguns bytes por militar, em vez de dezenas de KB. */
 var FOTO_IDX={};
 function temFoto(rg){
-  return !!(FOTO_IDX[rg]||FOTO_CACHE[rg]||(OVR[rg]&&OVR[rg].foto)||FOTOS[rg]);
+  return !!((FOTO_IDX||{})[rg]||(FOTO_CACHE||{})[rg]||((OVR||{})[rg]&&OVR[rg].foto)||FOTOS[rg]);
 }
 
 /* ---------- Firebase ---------- */
@@ -4549,6 +4578,14 @@ function salvarFoto(rg, dataFull, dataThumb, done){
   fotoCacheLS();
   FOTOS[rg]=thumb; saveFotos();
   FOTO_IDX[rg]=1;
+  /* FIX (V7): repinta o card na grade AGORA, com o estado local que acabou
+     de ser atualizado acima — nao espera a rede. Antes, a repintura so
+     acontecia dentro do .then() de sucesso do Firebase (mais abaixo); se a
+     gravacao remota falhasse, demorasse ou estivesse offline (!FB_DB), a
+     foto ficava certa em memoria mas o mini-card continuava mostrando
+     "Foto pendente" indefinidamente, pois nada mandava repintar aquele
+     elemento especifico. */
+  pintarFoto(rg,true);
   if(!FB_DB){
     toast('Sem conexão — foto salva apenas neste dispositivo');
     if(done) done(false); return;
