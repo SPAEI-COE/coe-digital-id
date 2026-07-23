@@ -745,7 +745,7 @@ function renderAdmin(app){
       el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ auditar('logout','',''); SESS=null; lsDel('sess'); irPara('login'); }},['Sair'])
     ]),
     el('nav',{cls:'adm-lado'}, [el('div',{cls:'sep',text:'Gestão'})].concat(MENU.map(function(m){
-      return el('button',{cls:m.id===VIEW.abaAdm?'ativo':'',onclick:function(){ VIEW.abaAdm=m.id; renderRota(); }},[m.rot]);
+      return el('button',{cls:m.id===VIEW.abaAdm?'ativo':'',onclick:function(){ if(m.id==='efetivo') VIEW.filtro={q:'',sec:'',posto:'',sit:''}; VIEW.abaAdm=m.id; renderRota(); }},[m.rot]);
     })).concat([
       el('div',{cls:'sep',text:'Apresentação'}),
       el('button',{onclick:function(){ window.open(location.pathname+'#/tv','_blank'); }},['▶ Abrir painel TV'])
