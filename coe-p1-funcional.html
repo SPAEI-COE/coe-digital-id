@@ -83,7 +83,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .tag-ok{background:#e3f5ea;color:var(--ok)}.tag-alerta{background:#fdf1e0;color:var(--alerta)}.tag-erro{background:#fbe7e4;color:var(--erro)}.tag-azul{background:#e6e6f7;color:var(--azul-700)}.tag-cinza{background:var(--prata-200);color:var(--grafite-700)}
 
 /* ===== TV ===== */
-.tv{height:100vh;background:radial-gradient(1400px 800px at 50% -15%,var(--azul-700),var(--azul-800) 50%,var(--azul-900));display:flex;flex-direction:column;overflow:hidden;cursor:none}
+.tv{height:100vh;background:radial-gradient(1400px 800px at 50% -15%,var(--azul-700),var(--azul-800) 50%,var(--azul-900));display:flex;flex-direction:column;overflow:hidden}
+.tv.modo-grade{cursor:none}
 .tv-topo{display:flex;align-items:center;gap:1em;padding:.7em 1.4em;background:rgba(4,0,63,.45)}
 .tv-topo img{width:3.2em;height:3.2em;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
 .tv-topo .t1{font-family:var(--display);font-weight:700;font-size:1.5em;color:#fff;letter-spacing:.03em;text-transform:uppercase;line-height:1}
@@ -97,7 +98,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .tv-secao-titulo{grid-column:1/-1;font-family:var(--display);font-weight:600;font-size:1em;color:var(--ouro-claro);text-transform:uppercase;letter-spacing:.12em;padding:.35em 0 .05em;border-bottom:1px solid rgba(200,170,0,.35);display:flex;align-items:baseline;gap:.6em}
 .tv-secao-titulo small{font-family:var(--mono);font-size:.6em;color:var(--prata-300);letter-spacing:0}
 .tv-pastas{display:grid;gap:1.2em;align-content:center;height:100%}
-.tv-pasta{background:linear-gradient(158deg,rgba(251,252,254,.10),rgba(225,230,239,.05));border:1px solid rgba(207,212,220,.25);border-radius:var(--r-lg);padding:1em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5em;text-align:center}
+.tv-pasta{background:linear-gradient(158deg,rgba(251,252,254,.10),rgba(225,230,239,.05));border:1px solid rgba(207,212,220,.25);border-radius:var(--r-lg);padding:1em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5em;text-align:center;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.tv-pasta:hover,.tv-pasta:focus-visible{transform:translateY(-4px);border-color:var(--ouro);box-shadow:var(--sombra-2)}
+.tv-pasta .p0{font-size:2.1em;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.tv-voltar{background:rgba(255,255,255,.08);border:1px solid rgba(207,212,220,.3);color:#fff;font-family:var(--corpo);font-size:.72em;font-weight:600;padding:.5em 1em;border-radius:var(--r-md);cursor:pointer;letter-spacing:.02em}
+.tv-voltar:hover{background:rgba(255,255,255,.16);border-color:var(--ouro)}
 .tv-pasta.ativa{border-color:var(--ouro);box-shadow:0 0 0 2px rgba(200,170,0,.35),var(--sombra-2);background:linear-gradient(158deg,rgba(200,170,0,.14),rgba(232,200,42,.05))}
 .tv-pasta .p1{font-family:var(--display);font-weight:600;font-size:1em;color:#fff;text-transform:uppercase;letter-spacing:.08em;line-height:1.1}
 .tv-pasta .p2{font-family:var(--mono);font-size:.62em;color:var(--prata-300)}
@@ -247,7 +252,7 @@ var SHARE = {};          // tokens (só admin)
 var SESS = null;
 var DB = null;           // referência RTDB (null = offline/local)
 var ONLINE = false;
-var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, penFoto: false };
+var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false };
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
 var ORDEM_PADRAO = ["CMT","SUBCMT","PROJETOS","P1","P2","P3","P4","P5","AJD","ALMOXARIFADO","NAOE","OBRAS","DEMOLIÇÃO","BLINDADOS","RUMB","FISCAL DE DIA","APOIO/DIVERSOS"];
 var RAIZ_RG = '82061';
@@ -583,7 +588,7 @@ function renderTV(app){
   app.innerHTML='';
   var esc100 = Math.min(150, Math.max(80, +CFG.escala||100));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920)); // 1080p=1×, 4K=2×
-  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
+  var raiz = el('div',{cls:'tv'+(CFG.modoTV==='pastas'?'':' modo-grade'),style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
   var secLbl = el('div',{cls:'s1'}), relog = el('div',{cls:'s2',cls:'s2'});
   raiz.appendChild(el('div',{cls:'tv-topo'},[
     el('img',{src:window.__BRASAO__,alt:''}),
@@ -602,6 +607,7 @@ function renderTV(app){
   tick();
 
   var secs = ordemSecoes().filter(function(s){ return (CFG.ocultas||[]).indexOf(s)<0 && membrosSecao(s).length; });
+  if(CFG.modoTV==='pastas' && VIEW.tvPasta && secs.indexOf(VIEW.tvPasta)<0) VIEW.tvPasta = null;
   var paginas = [], colsAtual = 4;
   var gradeFS = 16;
   function medidas(){
@@ -645,14 +651,14 @@ function renderTV(app){
     var md = medidas();
     function pagina(){ var p={sec:null,itens:[]}; paginas.push(p); return p; }
     if(CFG.modoTV==='pastas'){
-      secs.forEach(function(s){
-        var ms = membrosSecao(s);
-        var linhas = Math.max(1, Math.floor((md.alt+md.gap)/(md.cardH+md.gap)));
-        var porPag = md.cols*linhas;
-        for(var i=0;i<ms.length;i+=porPag){
-          var p = pagina(); p.sec=s; ms.slice(i,i+porPag).forEach(function(m){ p.itens.push({m:m}); });
-        }
-      });
+      if(!VIEW.tvPasta){ paginas=[{sec:null,itens:[]}]; VIEW.tvPag=0; return; }
+      var ms = membrosSecao(VIEW.tvPasta);
+      var linhas = Math.max(1, Math.floor((md.alt+md.gap)/(md.cardH+md.gap)));
+      var porPag = md.cols*linhas;
+      for(var i=0;i<ms.length;i+=porPag){
+        var p = pagina(); p.sec=VIEW.tvPasta; ms.slice(i,i+porPag).forEach(function(m){ p.itens.push({m:m}); });
+      }
+      if(!paginas.length) paginas=[{sec:VIEW.tvPasta,itens:[]}];
     } else {
       // empacotamento determinístico linha a linha (título ocupa linha inteira)
       var pg=null, y=0, col=0;
@@ -675,7 +681,23 @@ function renderTV(app){
     if(!paginas.length) paginas=[{sec:null,itens:[]}];
     if(VIEW.tvPag>=paginas.length) VIEW.tvPag=0;
   }
+  function tilesPastas(){
+    corpo.innerHTML='';
+    secLbl.textContent = 'Selecione uma pasta';
+    var wrap = el('div',{cls:'tv-pastas',style:'grid-template-columns:repeat(auto-fill,minmax(11.5em,1fr))'});
+    secs.forEach(function(s){
+      wrap.appendChild(el('div',{cls:'tv-pasta',tabindex:'0',onclick:function(){ VIEW.tvPasta=s; VIEW.tvPag=0; montar(); desenhaPagina(); },onkeydown:function(e){ if(e.key==='Enter'){ VIEW.tvPasta=s; VIEW.tvPag=0; montar(); desenhaPagina(); } }},[
+        el('div',{cls:'p0',text:'📁'}),
+        el('div',{cls:'p1',text:nomeSecao(s)}),
+        el('div',{cls:'p2',text:membrosSecao(s).length+' PM'})
+      ]));
+    });
+    corpo.appendChild(wrap);
+    var rod = el('div',{cls:'tv-rodape'},[el('span',{text:'Escala '+esc100+'%'})]);
+    corpo.appendChild(rod);
+  }
   function desenhaPagina(){
+    if(CFG.modoTV==='pastas' && !VIEW.tvPasta){ tilesPastas(); return; }
     corpo.innerHTML='';
     var pg = paginas[VIEW.tvPag % paginas.length];
     var grade = el('div',{cls:'tv-grade',style:'grid-template-columns:repeat('+colsAtual+',1fr);font-size:'+gradeFS.toFixed(2)+'px;gap:'+Math.max(12,.85*parseFloat(raiz.style.fontSize)).toFixed(1)+'px'});
@@ -690,6 +712,9 @@ function renderTV(app){
     });
     corpo.appendChild(grade);
     var rod = el('div',{cls:'tv-rodape'});
+    if(CFG.modoTV==='pastas'){
+      rod.appendChild(el('button',{cls:'tv-voltar',onclick:function(){ VIEW.tvPasta=null; VIEW.tvPag=0; desenhaPagina(); }},['← Voltar às pastas']));
+    }
     if(paginas.length>1){
       var pag = el('div',{cls:'tv-pag'});
       for(var i=0;i<Math.min(paginas.length,16);i++) pag.appendChild(el('i',{cls:i===(VIEW.tvPag%paginas.length)?'on':''}));
@@ -711,7 +736,14 @@ function renderTV(app){
   VIEW.tvTimer = setInterval(function(){
     tick(); seg++;
     var t = Math.max(5, +CFG.tempoPag||12);
-    if(paginas.length>1 && seg>=t){ seg=0; VIEW.tvPag=(VIEW.tvPag+1)%paginas.length; desenhaPagina(); }
+    if(seg<t) return;
+    seg=0;
+    if(CFG.modoTV==='pastas'){
+      if(!VIEW.tvPasta) return; // menu parado — espera clique, não gira sozinho
+      if(paginas.length>1 && VIEW.tvPag < paginas.length-1){ VIEW.tvPag++; }
+      else { VIEW.tvPasta=null; VIEW.tvPag=0; montar(); } // terminou de mostrar a pasta inteira → volta ao menu sozinho
+      desenhaPagina();
+    } else if(paginas.length>1){ VIEW.tvPag=(VIEW.tvPag+1)%paginas.length; desenhaPagina(); }
   }, 1000);
   raiz.addEventListener('click', function(){
     if(document.fullscreenElement) return;
