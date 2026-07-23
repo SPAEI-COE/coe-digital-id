@@ -84,7 +84,6 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 
 /* ===== TV ===== */
 .tv{height:100vh;background:radial-gradient(1400px 800px at 50% -15%,var(--azul-700),var(--azul-800) 50%,var(--azul-900));display:flex;flex-direction:column;overflow:hidden}
-.tv.modo-grade{cursor:none}
 .tv-topo{display:flex;align-items:center;gap:1em;padding:.7em 1.4em;background:rgba(4,0,63,.45)}
 .tv-topo img{width:3.2em;height:3.2em;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
 .tv-topo .t1{font-family:var(--display);font-weight:700;font-size:1.5em;color:#fff;letter-spacing:.03em;text-transform:uppercase;line-height:1}
@@ -588,7 +587,7 @@ function renderTV(app){
   app.innerHTML='';
   var esc100 = Math.min(150, Math.max(80, +CFG.escala||100));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920)); // 1080p=1×, 4K=2×
-  var raiz = el('div',{cls:'tv'+(CFG.modoTV==='pastas'?'':' modo-grade'),style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
+  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
   var secLbl = el('div',{cls:'s1'}), relog = el('div',{cls:'s2',cls:'s2'});
   raiz.appendChild(el('div',{cls:'tv-topo'},[
     el('img',{src:window.__BRASAO__,alt:''}),
@@ -681,6 +680,15 @@ function renderTV(app){
     if(!paginas.length) paginas=[{sec:null,itens:[]}];
     if(VIEW.tvPag>=paginas.length) VIEW.tvPag=0;
   }
+  function alternarModoTV(){
+    CFG.modoTV = CFG.modoTV==='pastas' ? 'grade' : 'pastas';
+    VIEW.tvPasta=null; VIEW.tvPag=0;
+    gravar('cfg', CFG, 'modo TV alternado na tela');
+    montar(); desenhaPagina();
+  }
+  function botaoModoTV(){
+    return el('button',{cls:'tv-voltar',onclick:alternarModoTV},[CFG.modoTV==='pastas' ? '▦ Ver em grade' : '📁 Ver por pastas']);
+  }
   function tilesPastas(){
     corpo.innerHTML='';
     secLbl.textContent = 'Selecione uma pasta';
@@ -693,7 +701,7 @@ function renderTV(app){
       ]));
     });
     corpo.appendChild(wrap);
-    var rod = el('div',{cls:'tv-rodape'},[el('span',{text:'Escala '+esc100+'%'})]);
+    var rod = el('div',{cls:'tv-rodape'},[botaoModoTV(), el('span',{text:'Escala '+esc100+'%'})]);
     corpo.appendChild(rod);
   }
   function desenhaPagina(){
@@ -711,7 +719,7 @@ function renderTV(app){
       else grade.appendChild(cardPM(it.m,{}));
     });
     corpo.appendChild(grade);
-    var rod = el('div',{cls:'tv-rodape'});
+    var rod = el('div',{cls:'tv-rodape'},[botaoModoTV()]);
     if(CFG.modoTV==='pastas'){
       rod.appendChild(el('button',{cls:'tv-voltar',onclick:function(){ VIEW.tvPasta=null; VIEW.tvPag=0; desenhaPagina(); }},['← Voltar às pastas']));
     }
