@@ -232,6 +232,43 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 
 @media (max-width:900px){.adm{grid-template-columns:1fr}.adm-lado{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--prata-200)}.adm-lado .sep{display:none}.adm-lado button{white-space:nowrap}}
 @media print{.adm-topo,.adm-lado{display:none}}
+
+/* ---- campo de data inteligente ---- */
+.dt{position:relative}
+.dt-lin{display:flex;gap:.35em}
+.dt-in{flex:1;min-width:0;font-family:var(--mono),ui-monospace,monospace;letter-spacing:.04em}
+.dt-in.ruim{border-color:#c0392b;background:#fff5f4}
+.dt-bt{flex:0 0 2.3em;border:1px solid var(--linha);background:#fff;border-radius:var(--r-sm);cursor:pointer;font-size:.95rem;line-height:1}
+.dt-bt:hover{background:#eef2f8}
+.dt-dica{font-size:.68rem;color:#5b6670;margin-top:.25em;min-height:.95em}
+.dt-in.ruim + .dt-dica,.dt-dica.erro{color:#c0392b}
+.dt-pop{position:absolute;z-index:70;top:calc(100% + .3em);left:0;width:min(21em,86vw);background:#fff;border:1px solid var(--linha);border-radius:var(--r-sm);box-shadow:0 14px 40px rgba(9,0,141,.22);padding:.6em}
+.dt-topo{display:flex;gap:.25em;align-items:center;margin-bottom:.5em}
+.dt-sel{flex:1;min-width:0;padding:.3em}
+.dt-ano{width:5em;text-align:center;font-family:var(--mono),monospace;padding:.3em}
+.dt-nav{border:1px solid var(--linha);background:#f6f8fc;border-radius:6px;cursor:pointer;padding:.3em .45em;font-size:.72rem;font-weight:700;color:var(--azul-900)}
+.dt-nav:hover{background:var(--azul-700);color:#fff}
+.dt-grade{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dt-dow{text-align:center;font-size:.62rem;font-weight:800;color:#8a93a5;padding:.2em 0}
+.dt-vazio{height:2em}
+.dt-dia{height:2em;border:0;background:transparent;border-radius:6px;cursor:pointer;font-size:.76rem;color:#2b3245}
+.dt-dia:hover{background:#e7ecf7}
+.dt-dia.hoje{outline:1px solid var(--ouro)}
+.dt-dia.sel{background:var(--azul-700);color:#fff;font-weight:800}
+.dt-pe{display:flex;gap:.4em;justify-content:flex-end;margin-top:.5em;border-top:1px solid var(--linha);padding-top:.5em}
+/* ---- barra de salvar ---- */
+.barra-salvar{margin-top:1.1em;display:flex;gap:.8em;align-items:center;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--linha);padding-top:.8em}
+.dica-salvar{font-size:.68rem;color:#5b6670;flex:1;min-width:11em}
+/* ---- editor de recorte de foto ---- */
+.crop-wrap{display:flex;flex-direction:column;gap:.7em;align-items:center}
+.crop-quadro{position:relative;width:240px;height:320px;border-radius:var(--r-sm);overflow:hidden;background:#0d1424;box-shadow:var(--sombra-1);touch-action:none;cursor:grab}
+.crop-quadro:active{cursor:grabbing}
+.crop-quadro canvas{width:100%;height:100%;display:block}
+.crop-guia{position:absolute;inset:0;pointer-events:none;border:2px solid rgba(255,255,255,.85);box-shadow:0 0 0 9999px rgba(0,0,0,.0) inset}
+.crop-guia::after{content:'';position:absolute;left:12%;right:12%;top:8%;height:56%;border:1px dashed rgba(255,255,255,.45);border-radius:40% 40% 45% 45%}
+.crop-ctrl{display:flex;gap:.6em;align-items:center;width:100%;max-width:280px}
+.crop-ctrl input[type=range]{flex:1}
+.crop-nota{font-size:.7rem;color:#5b6670;text-align:center;max-width:300px}
 </style>
 </head>
 <body>
@@ -266,6 +303,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
+var FILA_BOOT = null;    // gravações pendentes recuperadas do aparelho (preenchida no boot)
 function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
 /* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
    Não é segredo: o Firebase a expõe no cliente. Sem ela o Authentication não inicia.
@@ -348,10 +386,20 @@ function toast(msg, tipo){
   setTimeout(function(){ t.remove(); }, 3000);
 }
 var syncPend = [];
-function persistWarn(msg, retry){
-  syncPend.push({msg:msg, retry:retry});
+function persistWarn(msg, retry, caminho){
+  for(var i=0;i<syncPend.length;i++){ if(syncPend[i].msg===msg) return; }   // não empilha repetido
+  syncPend.push({msg:msg, retry:retry, caminho:caminho||''});
   desenhaAviso();
 }
+/* rito: erro de JS jamais pode ficar invisível — ele aborta o script inteiro em silêncio */
+window.addEventListener('error', function(ev){
+  if(!ev || !ev.message) return;
+  persistWarn('Falha interna do aplicativo: '+ev.message+(ev.lineno?' (linha '+ev.lineno+')':'')+'. Recarregue a página; se repetir, avise o suporte.');
+});
+window.addEventListener('unhandledrejection', function(ev){
+  var r = ev && ev.reason;
+  persistWarn('Operação não concluída: '+((r&&(r.message||r.code))||r||'motivo desconhecido'));
+});
 function desenhaAviso(){
   var a = $('#avisoSync');
   if(!syncPend.length){ if(a) a.remove(); return; }
@@ -494,17 +542,97 @@ function vencMaisProximo(m){
   return best;
 }
 
-/* ---------- persistência ---------- */
-function espelhoLocal(){ lsSet('ovr', OVR); lsSet('cfg', CFG); }
-function gravar(caminho, valor, descr){
-  // rito: estado local + repaint IMEDIATOS, rede depois
+/* ---------- persistência ----------
+   Regras (rito):
+   - o RTDB REJEITA payload com undefined/NaN e chaves com . # $ [ ] / — sanear SEMPRE
+   - .set() pode lançar de forma SÍNCRONA: try/catch obrigatório, senão o handler inteiro aborta
+   - só é "salvo" depois de confirmação de leitura no banco (read-back)
+   - eco do servidor NUNCA pode sobrescrever gravação pendente (PEND)
+   - falha vira FILA persistente + aviso fixo; nunca toast que some                       */
+var PEND = {};   // caminho -> valor em voo/não confirmado (blindagem contra o eco do servidor)
+var SEQW = {};   // caminho -> nº da última gravação disparada (evita falso "não salvou"
+                 // quando duas gravações no MESMO caminho acontecem no mesmo clique)
+var FILA = [];   // gravações que não chegaram ao banco (persistidas neste aparelho)
+function espelhoLocal(){ lsSet('ovr', OVR); lsSet('cfg', CFG); lsSet('fila', FILA); }
+function limpaValor(v){
+  if(v===undefined) return null;
+  if(v===null) return null;
+  if(typeof v==='number') return isFinite(v)?v:null;
+  if(typeof v!=='object') return v;
+  if(Array.isArray(v)) return v.map(limpaValor);
+  var o={}, vazio=true;
+  for(var k in v){
+    if(!Object.prototype.hasOwnProperty.call(v,k)) continue;
+    if(v[k]===undefined) continue;
+    var kk=String(k).replace(/[.#$\[\]\/]/g,'_');
+    o[kk]=limpaValor(v[k]); vazio=false;
+  }
+  return vazio?{}:o;
+}
+function igual(a,b){
+  if(a===b) return true;
+  if(a==null||b==null) return (a==null)&&(b==null);
+  if(typeof a!=='object'||typeof b!=='object') return String(a)===String(b);
+  var ka=Object.keys(a).filter(function(k){return a[k]!==null;}), kb=Object.keys(b).filter(function(k){return b[k]!==null;});
+  if(ka.length!==kb.length) return false;
+  for(var i=0;i<ka.length;i++){ if(!igual(a[ka[i]], b[ka[i]])) return false; }
+  return true;
+}
+function motivoErro(e){
+  var c=(e&&(e.code||e.message))||'erro desconhecido';
+  if(/permission[_ ]denied/i.test(c)) return 'PERMISSÃO NEGADA pelo Realtime Database (regras do banco). Nada foi gravado.';
+  if(/network|offline|unavailable/i.test(c)) return 'Sem rede no momento da gravação.';
+  if(/undefined/i.test(c)) return 'Dado inválido no formulário (campo indefinido).';
+  return String(c);
+}
+function enfileira(caminho, valor, descr, motivo){
+  FILA = FILA.filter(function(f){ return f.caminho!==caminho; });
+  FILA.push({caminho:caminho, valor:valor, descr:descr, ts:Date.now()});
   espelhoLocal();
-  renderRota();
-  if(!DB){ persistWarn('Sem conexão com o banco — "'+descr+'" ficou só neste dispositivo.', function(){ gravar(caminho,valor,descr); }); return Promise.resolve(false); }
-  return DB.ref(NS+'/'+caminho).set(valor).then(function(){ return true; }).catch(function(e){
-    persistWarn('Falha ao sincronizar "'+descr+'" com o banco.', function(){ gravar(caminho,valor,descr); });
+  persistWarn('NÃO SALVO NO BANCO: '+descr+' — '+motivo+' O dado está guardado só neste aparelho.', escoaFila, caminho);
+}
+function escoaFila(){
+  if(!DB || !FILA.length) return Promise.resolve();
+  var itens = FILA.slice();
+  return itens.reduce(function(p,it){
+    return p.then(function(){ return gravar(it.caminho, it.valor, it.descr); });
+  }, Promise.resolve());
+}
+function gravar(caminho, valor, descr){
+  descr = descr || caminho;
+  var limpo = limpaValor(valor);
+  var seq = SEQW[caminho] = (SEQW[caminho]||0)+1;
+  PEND[caminho] = limpo;
+  espelhoLocal(); agendarRepaint();
+  if(!DB){ enfileira(caminho, limpo, descr, 'Sem conexão com o banco.'); return Promise.resolve(false); }
+  var ref = DB.ref(NS+'/'+caminho), p;
+  try{ p = ref.set(limpo); }
+  catch(e){ enfileira(caminho, limpo, descr, motivoErro(e)); return Promise.resolve(false); }
+  return p.then(function(){
+    return ref.once('value');                       // read-back: prova de que o banco aceitou
+  }).then(function(snap){
+    if(SEQW[caminho]!==seq) return true;      // já houve gravação mais nova neste caminho: ela manda
+    var v = snap.val();
+    if(limpo!==null && v===null){ enfileira(caminho, limpo, descr, 'O banco confirmou a escrita mas devolveu vazio.'); return false; }
+    if(limpo!==null && !igual(v, limpo)){ enfileira(caminho, limpo, descr, 'O banco devolveu conteúdo diferente do enviado.'); return false; }
+    delete PEND[caminho];
+    FILA = FILA.filter(function(f){ return f.caminho!==caminho; });
+    espelhoLocal();
+    syncPend = syncPend.filter(function(w){ return w.caminho!==caminho; }); desenhaAviso();
+    return true;
+  }).catch(function(e){
+    if(SEQW[caminho]!==seq) return false;
+    enfileira(caminho, limpo, descr, motivoErro(e));
     return false;
   });
+}
+/* repaint coalescido: nunca re-renderiza a TV no meio de uma página nem
+   destrói formulário aberto a cada eco do banco */
+var REPAINT_T = null, TV_SUJO = false;
+function agendarRepaint(){
+  if(VIEW.rota==='tv'){ TV_SUJO = true; return; }
+  if(REPAINT_T) return;
+  REPAINT_T = setTimeout(function(){ REPAINT_T=null; renderRota(); }, 120);
 }
 function auditar(acao, alvo, det){
   var ev = { ts: Date.now(), adm: SESS?SESS.rg:'?', acao: acao, alvo: alvo||'', det: det||'' };
@@ -536,12 +664,21 @@ function initFirebase(){
     }
     DB.ref('.info/connected').on('value', function(s){
       ONLINE = !!s.val();
+      if(ONLINE && FILA.length) setTimeout(escoaFila, 800);   // voltou a rede: reenvia o que ficou pendente
       var p=$('#pino'); if(p){ p.classList.toggle('on', ONLINE); p.lastChild.textContent = ONLINE?'Banco conectado':'Sem conexão'; }
     });
-    DB.ref(NS+'/mil').on('value', function(s){ OVR = s.val()||{}; espelhoLocal(); renderRota(); });
-    DB.ref(NS+'/fotos').on('value', function(s){ FOTOS = s.val()||{}; renderRota(); });
-    DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v){ CFG = Object.assign({escala:100,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[]}, v); espelhoLocal(); renderRota(); } });
-    DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; renderRota(); });
+    DB.ref(NS+'/mil').on('value', function(s){
+      var srv = s.val()||{};
+      for(var c in PEND){ if(c.indexOf('mil/')===0) srv[c.slice(4)] = PEND[c]; }   // pendência local vence o eco
+      OVR = srv; espelhoLocal(); agendarRepaint();
+    });
+    DB.ref(NS+'/fotos').on('value', function(s){
+      var srv = s.val()||{};
+      for(var c in PEND){ if(c.indexOf('fotos/')===0) srv[c.slice(6)] = PEND[c]; }
+      FOTOS = srv; agendarRepaint();
+    });
+    DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:100,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[]}, v); espelhoLocal(); agendarRepaint(); } });
+    DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; agendarRepaint(); });
   }catch(e){ DB=null; ONLINE=false; }
 }
 function carregaAdmins(){
@@ -947,11 +1084,19 @@ function renderTV(app){
   }
   montar(); desenhaPagina();
   var seg = 0;
+  TV_SUJO = false;
   VIEW.tvTimer = setInterval(function(){
     tick(); seg++;
     var t = Math.max(5, +CFG.tempoPag||12);
     if(seg<t) return;
     seg=0;
+    if(TV_SUJO){            // dados mudaram no banco: recalcula na virada da página, nunca no meio
+      TV_SUJO = false;
+      montar();
+      if(VIEW.tvPag>=paginas.length) VIEW.tvPag=0;
+      desenhaPagina();
+      if(paginas.length<=1) return;
+    }
     if(CFG.modoTV==='pastas'){
       if(!VIEW.tvPasta) return; // menu parado — espera clique, não gira sozinho
       if(paginas.length>1 && VIEW.tvPag < paginas.length-1){ VIEW.tvPag++; }
@@ -1270,14 +1415,22 @@ function salvarFicha(rg, aba, dados, descr){
   if(!OVR[rg]) OVR[rg]={rg:rg};
   if(!OVR[rg].ficha) OVR[rg].ficha={};
   OVR[rg].ficha[aba]=dados;
-  gravar('mil/'+rg, OVR[rg], descr||('ficha de '+rg));
   auditar('editar_ficha', rg, aba);
+  return gravar('mil/'+rg, OVR[rg], descr||('ficha de '+rg));
+}
+/* grava campos-base e uma aba da ficha em UMA única escrita atômica */
+function salvarConjunto(rg, campos, aba, dadosAba, descr){
+  if(!OVR[rg]) OVR[rg]={rg:rg};
+  if(campos) for(var k in campos) OVR[rg][k]=campos[k];
+  if(aba){ if(!OVR[rg].ficha) OVR[rg].ficha={}; OVR[rg].ficha[aba]=dadosAba; }
+  auditar('editar_militar', rg, (campos?Object.keys(campos).join(','):'')+(aba?'|ficha:'+aba:''));
+  return gravar('mil/'+rg, OVR[rg], descr||('dados de '+rg));
 }
 function salvarBase(rg, campos){
   if(!OVR[rg]) OVR[rg]={rg:rg};
   for(var k in campos) OVR[rg][k]=campos[k];
-  gravar('mil/'+rg, OVR[rg], 'dados de '+rg);
   auditar('editar_militar', rg, Object.keys(campos).join(','));
+  return gravar('mil/'+rg, OVR[rg], 'dados de '+rg);
 }
 function abrirFicha(m0){
   VIEW.fichaRG = m0.rg; VIEW.fichaAba='ident';
@@ -1322,22 +1475,89 @@ function desenhaFicha(md){
   corpo.appendChild(area);
   ({ident:abaIdent,func:abaFunc,hist:abaHist,lic:abaLic,saude:abaSaude,hab:abaHab,cursos:abaCursos,dep:abaDep,cont:abaCont,docs:abaDocs,qr:abaQR}[VIEW.fichaAba])(area, m, md);
 }
+/* Foto: TODA imagem enviada é normalizada para 3x4 (600x800) antes de ir ao
+   banco. Assim o enquadramento é idêntico no card, na ficha, no QR público e
+   principalmente na TV — nenhuma foto "estoura" nem fica cortada de forma
+   diferente em cada tela. O administrador ainda pode ajustar zoom/posição. */
+var FOTO_L = 600, FOTO_A = 800;
 function subirFoto(rg, file, done){
-  var img = new Image(), rd = new FileReader();
-  rd.onload = function(){ img.src = rd.result; };
-  img.onload = function(){
-    var max = 640, w=img.width, h=img.height, k=Math.min(1, max/Math.max(w,h));
-    var cv = document.createElement('canvas'); cv.width=Math.round(w*k); cv.height=Math.round(h*k);
-    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    var data = cv.toDataURL('image/jpeg',.82);
-    FOTOS[rg]=data;            // repaint imediato (rito)
-    if(done) done();
-    toast('Foto atualizada.','ok');
-    gravar('fotos/'+rg, data, 'foto de '+rg);
-    auditar('foto', rg, bytesFmt(data.length));
+  if(!file) return;
+  if(!/^image\//.test(file.type||'')){ toast('Selecione um arquivo de imagem (JPG/PNG).','erro'); return; }
+  if(file.size > 12*1048576){ toast('Imagem acima de 12 MB — use uma menor.','erro'); return; }
+  var rd = new FileReader();
+  rd.onerror = function(){ toast('Não foi possível ler o arquivo.','erro'); };
+  rd.onload = function(){
+    var img = new Image();
+    img.onerror = function(){ toast('Arquivo de imagem inválido ou corrompido.','erro'); };
+    img.onload = function(){
+      if(!img.width || !img.height){ toast('Imagem sem dimensões válidas.','erro'); return; }
+      editorFoto(img, function(dataURL){
+        FOTOS[rg] = dataURL;                 // repaint imediato a partir do estado local (rito)
+        if(done) done();
+        auditar('foto', rg, bytesFmt(dataURL.length));
+        gravar('fotos/'+rg, dataURL, 'foto de '+rg).then(function(ok){
+          if(ok) toast('✔ Foto salva e confirmada no banco (aparece na TV).','ok');
+        });
+      });
+    };
+    img.src = rd.result;
   };
-  img.onerror = function(){ toast('Arquivo de imagem inválido.','erro'); };
   rd.readAsDataURL(file);
+}
+function editorFoto(img, aplicar){
+  var cv = el('canvas'); cv.width=FOTO_L; cv.height=FOTO_A;
+  var ctx = cv.getContext('2d');
+  var quadro = el('div',{cls:'crop-quadro'},[cv, el('div',{cls:'crop-guia'})]);
+  var kBase = Math.max(FOTO_L/img.width, FOTO_A/img.height);   // cover garantido: nunca sobra borda
+  var st = {z:1, ox:0, oy:0};
+  function limites(){
+    var w = img.width*kBase*st.z, h = img.height*kBase*st.z;
+    st.ox = Math.min(0, Math.max(FOTO_L-w, st.ox));
+    st.oy = Math.min(0, Math.max(FOTO_A-h, st.oy));
+    return {w:w,h:h};
+  }
+  function pinta(){
+    var L = limites();
+    ctx.fillStyle='#0d1424'; ctx.fillRect(0,0,FOTO_L,FOTO_A);
+    ctx.drawImage(img, st.ox, st.oy, L.w, L.h);
+  }
+  function auto(){                       // enquadramento institucional: centro na horizontal, topo na vertical
+    st.z = 1; var L;
+    st.ox = 0; st.oy = 0; L = limites();
+    st.ox = (FOTO_L - L.w)/2;
+    st.oy = Math.max(FOTO_A - L.h, -(L.h*0.04));
+    limites(); pinta();
+  }
+  var arrasto=null;
+  quadro.addEventListener('pointerdown', function(e){
+    arrasto={x:e.clientX,y:e.clientY,ox:st.ox,oy:st.oy};
+    try{ quadro.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  quadro.addEventListener('pointermove', function(e){
+    if(!arrasto) return;
+    var esc = FOTO_L/quadro.clientWidth;
+    st.ox = arrasto.ox + (e.clientX-arrasto.x)*esc;
+    st.oy = arrasto.oy + (e.clientY-arrasto.y)*esc;
+    pinta();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){ quadro.addEventListener(ev, function(){ arrasto=null; }); });
+  var zoom = el('input',{type:'range',min:'100',max:'300',value:'100'});
+  zoom.addEventListener('input', function(){ st.z = (+zoom.value)/100; pinta(); });
+  var corpo = el('div',{cls:'crop-wrap'},[
+    el('p',{cls:'crop-nota',text:'A foto é recortada em 3x4 automaticamente. Arraste para posicionar o rosto dentro da guia e use o zoom se precisar.'}),
+    quadro,
+    el('div',{cls:'crop-ctrl'},[el('span',{style:'font-size:.7rem;color:#5b6670',text:'Zoom'}), zoom]),
+    el('button',{cls:'btn btn-borda btn-min',type:'button',onclick:function(){ zoom.value='100'; auto(); }},['↺ Enquadrar automaticamente'])
+  ]);
+  auto();
+  var md = modal('Ajustar foto 3x4', corpo, [
+    {rotulo:'Cancelar'},
+    {rotulo:'✔ Usar esta foto', cls:'btn-azul', acao:function(fechar){
+      var data = cv.toDataURL('image/jpeg', .84);
+      fechar(); aplicar(data);
+    }}
+  ], 'crop');
+  return md;
 }
 function duplicarMilitar(m){
   var i=1, rg;
@@ -1346,6 +1566,133 @@ function duplicarMilitar(m){
   gravar('mil/'+rg, OVR[rg], 'duplicação de '+m.rg);
   auditar('duplicar_militar', m.rg, '→ '+rg);
   toast('Militar duplicado como RG '+rg+'. Ajuste os dados.','ok');
+}
+
+
+/* ============================================================
+   CAMPO DE DATA INTELIGENTE
+   Problema resolvido: <input type=date> obriga navegar mês a mês
+   (2026 -> 1980 = 552 cliques). Aqui: digitação direta com máscara,
+   ano em campo próprio, atalhos e calendário com salto por década.
+   Contrato: valor interno sempre ISO 'aaaa-mm-dd' (compatível com a base).
+   ============================================================ */
+var MES_ABREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function isoBR(v){
+  if(!v) return '';
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+  return m ? m[3]+'/'+m[2]+'/'+m[1] : String(v);
+}
+function brISO(v){
+  if(!v) return '';
+  var t=String(v).replace(/\D/g,'');
+  if(t.length!==8) return '';
+  var d=+t.slice(0,2), mo=+t.slice(2,4), a=+t.slice(4,8);
+  if(mo<1||mo>12||d<1||d>31||a<1900||a>2200) return '';
+  var dt=new Date(a,mo-1,d);
+  if(dt.getFullYear()!==a||dt.getMonth()!==mo-1||dt.getDate()!==d) return '';
+  return a+'-'+('0'+mo).slice(-2)+'-'+('0'+d).slice(-2);
+}
+function campoData(valor, opts){
+  opts = opts||{};
+  var wrap = el('div',{cls:'dt'});
+  var inp  = el('input',{cls:'dt-in',type:'text',inputmode:'numeric',placeholder:'dd/mm/aaaa',maxlength:'10',autocomplete:'off',value:isoBR(valor)});
+  var bt   = el('button',{cls:'dt-bt',type:'button','aria-label':'Abrir calendário',title:'Abrir calendário'},['📅']);
+  var dica = el('div',{cls:'dt-dica'});
+  var pop  = null;
+  wrap.appendChild(el('div',{cls:'dt-lin'},[inp,bt]));
+  wrap.appendChild(dica);
+
+  function mascara(){
+    var t = inp.value.replace(/\D/g,'').slice(0,8), o='';
+    if(t.length>=1) o = t.slice(0,2);
+    if(t.length>=3) o = t.slice(0,2)+'/'+t.slice(2,4);
+    if(t.length>=5) o = t.slice(0,2)+'/'+t.slice(2,4)+'/'+t.slice(4,8);
+    inp.value = o;
+    valida(false);
+  }
+  function valida(marcar){
+    var t = inp.value.replace(/\D/g,'');
+    if(!t.length){ inp.classList.remove('ruim'); dica.textContent=''; return true; }
+    if(t.length<8){ if(marcar){ inp.classList.add('ruim'); dica.textContent='Data incompleta — use dd/mm/aaaa.'; } return false; }
+    var iso = brISO(inp.value);
+    if(!iso){ inp.classList.add('ruim'); dica.textContent='Data inexistente no calendário.'; return false; }
+    inp.classList.remove('ruim');
+    var dt = new Date(iso+'T00:00:00');
+    var anos = Math.floor((Date.now()-dt.getTime())/31557600000);
+    dica.textContent = dt.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) + (anos>=0&&anos<130?' · '+anos+' ano(s)':'');
+    return true;
+  }
+  inp.addEventListener('input', mascara);
+  inp.addEventListener('blur', function(){ valida(true); });
+  inp.addEventListener('keydown', function(e){
+    if(e.key==='Enter'){ e.preventDefault(); valida(true); fecharPop(); }
+    if(e.key==='ArrowUp'||e.key==='ArrowDown'){          // ajusta o dia com as setas
+      var iso = brISO(inp.value); if(!iso) return;
+      e.preventDefault();
+      var d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()+(e.key==='ArrowUp'?1:-1));
+      inp.value = isoBR(d.toISOString().slice(0,10)); valida(true);
+    }
+  });
+  function fecharPop(){ if(pop){ pop.remove(); pop=null; document.removeEventListener('mousedown', fora, true); } }
+  function fora(e){ if(pop && !pop.contains(e.target) && e.target!==bt) fecharPop(); }
+
+  function abrirPop(){
+    if(pop){ fecharPop(); return; }
+    var base = brISO(inp.value) || (opts.padrao||hoje());
+    var cur  = new Date(base+'T00:00:00');
+    var ano  = cur.getFullYear(), mes = cur.getMonth();
+    pop = el('div',{cls:'dt-pop'});
+    var topo = el('div',{cls:'dt-topo'});
+    var selMes = el('select',{cls:'dt-sel'});
+    MES_ABREV.forEach(function(nm,i){ selMes.appendChild(el('option',{value:String(i),text:NOMES_MES[i]})); });
+    var inAno = el('input',{cls:'dt-ano',type:'number',min:'1900',max:'2200',step:'1',value:String(ano)});
+    var bMenos = el('button',{cls:'dt-nav',type:'button',title:'Mês anterior'},['‹']);
+    var bMais  = el('button',{cls:'dt-nav',type:'button',title:'Próximo mês'},['›']);
+    var bA10m  = el('button',{cls:'dt-nav',type:'button',title:'−10 anos'},['«10']);
+    var bA10p  = el('button',{cls:'dt-nav',type:'button',title:'+10 anos'},['10»']);
+    topo.appendChild(bMenos); topo.appendChild(selMes); topo.appendChild(bA10m); topo.appendChild(inAno); topo.appendChild(bA10p); topo.appendChild(bMais);
+    pop.appendChild(topo);
+    var grade = el('div',{cls:'dt-grade'});
+    pop.appendChild(grade);
+    var pe = el('div',{cls:'dt-pe'});
+    pe.appendChild(el('button',{cls:'btn btn-borda btn-min',type:'button',onclick:function(){ escolhe(hoje()); }},['Hoje']));
+    pe.appendChild(el('button',{cls:'btn btn-borda btn-min',type:'button',onclick:function(){ inp.value=''; valida(false); fecharPop(); }},['Limpar']));
+    pe.appendChild(el('button',{cls:'btn btn-borda btn-min',type:'button',onclick:fecharPop},['Fechar']));
+    pop.appendChild(pe);
+    function escolhe(iso){ inp.value=isoBR(iso); valida(true); fecharPop(); }
+    function pinta(){
+      selMes.value=String(mes); if(String(ano)!==inAno.value) inAno.value=String(ano);
+      grade.innerHTML='';
+      ['D','S','T','Q','Q','S','S'].forEach(function(d){ grade.appendChild(el('span',{cls:'dt-dow',text:d})); });
+      var prim = new Date(ano,mes,1).getDay(), dias = new Date(ano,mes+1,0).getDate();
+      for(var i=0;i<prim;i++) grade.appendChild(el('span',{cls:'dt-vazio'}));
+      var sel = brISO(inp.value), hj = hoje();
+      for(var d=1;d<=dias;d++){
+        (function(d){
+          var iso = ano+'-'+('0'+(mes+1)).slice(-2)+'-'+('0'+d).slice(-2);
+          var cls = 'dt-dia'+(iso===sel?' sel':'')+(iso===hj?' hoje':'');
+          grade.appendChild(el('button',{cls:cls,type:'button',onclick:function(){ escolhe(iso); }},[String(d)]));
+        })(d);
+      }
+    }
+    selMes.addEventListener('change', function(){ mes=+selMes.value; pinta(); });
+    inAno.addEventListener('input', function(){ var a=+inAno.value; if(a>=1900&&a<=2200){ ano=a; pinta(); } });
+    bMenos.addEventListener('click', function(){ mes--; if(mes<0){mes=11;ano--;} pinta(); });
+    bMais .addEventListener('click', function(){ mes++; if(mes>11){mes=0;ano++;} pinta(); });
+    bA10m .addEventListener('click', function(){ ano-=10; pinta(); });
+    bA10p .addEventListener('click', function(){ ano+=10; pinta(); });
+    pinta();
+    wrap.appendChild(pop);
+    setTimeout(function(){ document.addEventListener('mousedown', fora, true); },0);
+    inAno.focus(); inAno.select();
+  }
+  bt.addEventListener('click', abrirPop);
+  return {
+    no: wrap,
+    ler: function(){ return brISO(inp.value); },
+    valido: function(){ return valida(true); },
+    vazio: function(){ return !inp.value.replace(/\D/g,'').length; }
+  };
 }
 
 /* ---- construtores de formulário ---- */
@@ -1357,14 +1704,60 @@ function formCampos(defs, valores, extraCls){
     if(d.tipo==='select'){ inp = el('select'); (d.ops||[]).forEach(function(o){ inp.appendChild(el('option',{value:o,text:o,selected:String(v)===o?'':null})); }); }
     else if(d.tipo==='textarea'){ inp = el('textarea',{rows:'2'}); inp.value=v; }
     else if(d.tipo==='check'){ inp = el('select'); ['Não','Sim'].forEach(function(o){ inp.appendChild(el('option',{value:o,text:o,selected:(v===true||v==='Sim')===(o==='Sim')?'':null})); }); }
+    else if(d.tipo==='date'){ inp = campoData(v); }
     else { inp = el('input',{type:d.tipo||'text',value:v}); }
     inputs[d.id]=inp;
-    wrap.appendChild(el('div',{cls:'campo'+(d.largo?' largo':'')},[el('label',{text:d.rot}),inp]));
+    wrap.appendChild(el('div',{cls:'campo'+(d.largo?' largo':'')},[el('label',{text:d.rot}), inp.no||inp]));
   });
-  return { no:wrap, ler:function(){ var o={}; defs.forEach(function(d){ var x=inputs[d.id].value; o[d.id] = d.tipo==='check' ? x==='Sim' : x; }); return o; } };
+  return {
+    no:wrap,
+    ler:function(){
+      var o={};
+      defs.forEach(function(d){
+        var c = inputs[d.id];
+        if(d.tipo==='date'){ o[d.id] = c.ler()||''; return; }
+        var x = c.value;
+        o[d.id] = d.tipo==='check' ? x==='Sim' : x;
+      });
+      return o;
+    },
+    valido:function(){
+      var ok=true, ruim=[];
+      defs.forEach(function(d){
+        if(d.tipo!=='date') return;
+        var c=inputs[d.id];
+        if(!c.vazio() && !c.valido()){ ok=false; ruim.push(d.rot); }
+      });
+      if(!ok) toast('Corrija a data: '+ruim.join(', '),'erro');
+      return ok;
+    }
+  };
 }
-function botaoSalvar(fn){ return el('div',{style:'margin-top:1em;display:flex;justify-content:flex-end'},[el('button',{cls:'btn btn-azul',onclick:fn},['💾 Salvar'])]); }
-function listaRegistros(area, itens, defs, opts, aoMudar){
+/* Salvar = ação atômica com prova: valida -> grava -> confirma no banco ->
+   fecha a ficha e volta à tela de origem. Ficha aberta depois de clicar em
+   Salvar significa que NÃO salvou (o motivo aparece no aviso fixo). */
+function botaoSalvar(fn, md, rot){
+  var b = el('button',{cls:'btn btn-azul'},['💾 '+(rot||'Salvar e fechar')]);
+  b.addEventListener('click', function(){
+    if(b.disabled) return;
+    b.disabled=true; b.textContent='⏳ Salvando…';
+    var r;
+    try{ r = fn(); }
+    catch(e){ b.disabled=false; b.textContent='💾 '+(rot||'Salvar e fechar'); toast('Erro ao preparar os dados: '+(e.message||e),'erro'); throw e; }
+    if(r===false){ b.disabled=false; b.textContent='💾 '+(rot||'Salvar e fechar'); return; }
+    Promise.resolve(r).then(function(ok){
+      if(ok===false){
+        b.disabled=false; b.textContent='💾 '+(rot||'Salvar e fechar');
+        toast('Não foi possível gravar no banco. Veja o aviso na tela.','erro');
+        return;
+      }
+      toast('✔ Salvo e confirmado no banco.','ok');
+      if(md && md.fechar) md.fechar(); else agendarRepaint();
+    });
+  });
+  return el('div',{cls:'barra-salvar'},[el('span',{cls:'dica-salvar',text:'Ao salvar, a ficha fecha sozinha — isso confirma que o dado foi gravado.'}), b]);
+}
+function listaRegistros(area, itens, defs, opts, aoMudar, md){
   // lista editável de registros (histórico, licenças, cursos, dependentes…)
   opts=opts||{};
   var box = el('div',{cls:opts.timeline?'tl lista-reg':'lista-reg'}), formularios=[];
@@ -1376,7 +1769,10 @@ function listaRegistros(area, itens, defs, opts, aoMudar){
   (itens||[]).forEach(linha);
   area.appendChild(box);
   area.appendChild(el('div',{cls:'add-reg'},[el('button',{cls:'btn btn-borda btn-min',onclick:function(){ linha({}); }},['+ Adicionar registro'])]));
-  area.appendChild(botaoSalvar(function(){ aoMudar(formularios.map(function(f){ return f.ler(); })); toast('Registros salvos.','ok'); }));
+  area.appendChild(botaoSalvar(function(){
+    for(var i=0;i<formularios.length;i++){ if(!formularios[i].valido()) return false; }
+    return aoMudar(formularios.map(function(f){ return f.ler(); }));
+  }, md));
 }
 
 /* ---- abas ---- */
@@ -1403,11 +1799,11 @@ function abaIdent(area, m, md){
   area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin:1.1em 0 .6em',text:'Identificação civil'}));
   area.appendChild(extra.no);
   area.appendChild(botaoSalvar(function(){
+    if(!base.valido() || !extra.valido()) return false;
     var b = base.ler(); b.nome = (b.nome||'').toUpperCase();
-    salvarBase(m.rg, b);
-    salvarFicha(m.rg, 'ident', extra.ler(), 'identificação de '+m.rg);
-    toast('Identificação salva.','ok'); desenhaFicha(md);
-  }));
+    if(!b.nome){ toast('O nome não pode ficar em branco.','erro'); return false; }
+    return salvarConjunto(m.rg, b, 'ident', extra.ler(), 'identificação de '+m.rg);
+  }, md));
 }
 function abaFunc(area, m, md){
   var d = fichaGet(m,'func')||{};
@@ -1439,27 +1835,31 @@ function abaFunc(area, m, md){
   }
   pintaEsp();
   area.appendChild(espBox);
-  area.appendChild(botaoSalvar(function(){ var o=f.ler(); o.especialidades=espSel; salvarFicha(m.rg,'func',o); toast('Dados funcionais salvos.','ok'); }));
+  area.appendChild(botaoSalvar(function(){
+    if(!f.valido()) return false;
+    var o=f.ler(); o.especialidades=espSel;
+    return salvarFicha(m.rg,'func',o);
+  }, md));
 }
-function abaHist(area, m){
+function abaHist(area, m, md){
   area.appendChild(el('p',{cls:'nota-info',text:'Linha do tempo da carreira — inclusão, promoções, cursos, movimentações e demais eventos.'}));
   listaRegistros(area, fichaGet(m,'hist'), [
     {id:'data',rot:'Data',tipo:'date'},
     {id:'tipo',rot:'Tipo',tipo:'select',ops:['Inclusão','Data de praça','Promoção','Curso','Função','Movimentação','Licença','Alteração funcional','Elogio','Outro']},
     {id:'descr',rot:'Descrição',largo:true},
     {id:'doc',rot:'Documento/BOL'}
-  ], {timeline:true}, function(regs){ salvarFicha(m.rg,'hist',regs); });
+  ], {timeline:true}, function(regs){ return salvarFicha(m.rg,'hist',regs); }, md);
 }
-function abaLic(area, m){
+function abaLic(area, m, md){
   listaRegistros(area, fichaGet(m,'lic'), [
     {id:'tipo',rot:'Tipo',tipo:'select',ops:['Licença especial','1ª licença especial','2ª licença especial','Férias','Licença','Afastamento','LTS','Dispensa','Outro']},
     {id:'ini',rot:'Início',tipo:'date'},
     {id:'fim',rot:'Término',tipo:'date'},
     {id:'doc',rot:'Documento'},
     {id:'obs',rot:'Observação',largo:true}
-  ], {}, function(regs){ salvarFicha(m.rg,'lic',regs); });
+  ], {}, function(regs){ return salvarFicha(m.rg,'lic',regs); }, md);
 }
-function abaSaude(area, m){
+function abaSaude(area, m, md){
   area.appendChild(el('p',{cls:'nota-restr',text:'ÁREA RESTRITA — estas informações nunca aparecem na TV nem em QR Code/links de compartilhamento.'}));
   var f = formCampos([
     {id:'aptidao',rot:'Aptidão',tipo:'select',ops:['','Apto','Apto A','Apto B','Apto C','Restrição','Inapto']},
@@ -1469,7 +1869,10 @@ function abaSaude(area, m){
     {id:'obs',rot:'Observações',tipo:'textarea',largo:true}
   ], fichaGet(m,'saude')||{});
   area.appendChild(f.no);
-  area.appendChild(botaoSalvar(function(){ salvarFicha(m.rg,'saude',f.ler(),'saúde de '+m.rg); toast('Dados de saúde salvos.','ok'); }));
+  area.appendChild(botaoSalvar(function(){
+    if(!f.valido()) return false;
+    return salvarFicha(m.rg,'saude',f.ler(),'saúde de '+m.rg);
+  }, md));
 }
 function abaHab(area, m, md){
   var h = m.habilitacao||{};
@@ -1482,13 +1885,13 @@ function abaHab(area, m, md){
   ], {numero:h.numero,categoria:h.categoria,validade:h.validade,primeira:(fichaGet(m,'hab')||{}).primeira,obs:(fichaGet(m,'hab')||{}).obs});
   area.appendChild(f.no);
   area.appendChild(botaoSalvar(function(){
+    if(!f.valido()) return false;
     var v=f.ler();
-    salvarBase(m.rg,{habilitacao:{numero:v.numero,categoria:v.categoria,validade:v.validade}});
-    salvarFicha(m.rg,'hab',{primeira:v.primeira,obs:v.obs});
-    toast('Habilitação salva.','ok'); desenhaFicha(md);
-  }));
+    return salvarConjunto(m.rg, {habilitacao:{numero:v.numero,categoria:v.categoria,validade:v.validade}},
+                          'hab', {primeira:v.primeira,obs:v.obs}, 'habilitação de '+m.rg);
+  }, md));
 }
-function abaCursos(area, m){
+function abaCursos(area, m, md){
   var atuais = (m.cursos||[]).map(function(c){ return {curso:c.nome||c.curso||'',validade:c.validade||'',inst:c.inst||'',ch:c.ch||'',periodo:c.periodo||'',obs:c.obs||''}; });
   var extras = fichaGet(m,'cursos');
   listaRegistros(area, extras||atuais, [
@@ -1499,20 +1902,20 @@ function abaCursos(area, m){
     {id:'validade',rot:'Validade',tipo:'date'},
     {id:'obs',rot:'Observações',largo:true}
   ], {}, function(regs){
-    salvarFicha(m.rg,'cursos',regs);
-    salvarBase(m.rg,{cursos:regs.map(function(r){ return {nome:r.curso,validade:r.validade||null}; })});
-  });
+    return salvarConjunto(m.rg, {cursos:regs.map(function(r){ return {nome:r.curso,validade:r.validade||''}; })},
+                          'cursos', regs, 'cursos de '+m.rg);
+  }, md);
 }
-function abaDep(area, m){
+function abaDep(area, m, md){
   listaRegistros(area, fichaGet(m,'dep'), [
     {id:'nome',rot:'Nome',largo:true},
     {id:'parente',rot:'Parentesco',tipo:'select',ops:['','Cônjuge','Filho(a)','Pai','Mãe','Outro']},
     {id:'nasc',rot:'Data de nascimento',tipo:'date'},
     {id:'depend',rot:'Dependência'},
     {id:'obs',rot:'Observações',largo:true}
-  ], {}, function(regs){ salvarFicha(m.rg,'dep',regs); });
+  ], {}, function(regs){ return salvarFicha(m.rg,'dep',regs); }, md);
 }
-function abaCont(area, m){
+function abaCont(area, m, md){
   area.appendChild(el('p',{cls:'nota-restr',text:'ÁREA RESTRITA — endereço e contatos pessoais nunca são expostos na TV nem em QR Code/links.'}));
   var f = formCampos([
     {id:'end',rot:'Endereço',largo:true},{id:'num',rot:'Número'},{id:'comp',rot:'Complemento'},
@@ -1522,7 +1925,10 @@ function abaCont(area, m){
     {id:'obs',rot:'Observações',tipo:'textarea',largo:true}
   ], fichaGet(m,'cont')||{});
   area.appendChild(f.no);
-  area.appendChild(botaoSalvar(function(){ salvarFicha(m.rg,'cont',f.ler(),'contatos de '+m.rg); toast('Contatos salvos.','ok'); }));
+  area.appendChild(botaoSalvar(function(){
+    if(!f.valido()) return false;
+    return salvarFicha(m.rg,'cont',f.ler(),'contatos de '+m.rg);
+  }, md));
 }
 /* ---- documentos ---- */
 function abaDocs(area, m){
@@ -1547,25 +1953,58 @@ function abaDocs(area, m){
       ]));
     });
     function enviar(file){
-      if(file.size>2*1048576){ toast('Arquivo acima de 2 MB.','erro'); return; }
+      if(!file) return;
+      if(file.size>2*1048576){ toast('Arquivo de '+bytesFmt(file.size)+' — o limite é 2 MB. Comprima o PDF e tente de novo.','erro'); return; }
+      if(!/pdf|image\//i.test(file.type||'') && !/\.pdf$/i.test(file.name)){ toast('Envie apenas PDF ou imagem.','erro'); return; }
+      var dup = Object.keys(meta||{}).some(function(k){ return (meta[k].nome||'')===file.name && meta[k].size===file.size; });
+      if(dup){ toast('Este arquivo já está anexado nesta ficha.','erro'); return; }
       var rd = new FileReader();
+      rd.onerror = function(){ toast('Falha ao ler o arquivo no aparelho.','erro'); };
       rd.onload = function(){
         var id = uid();
-        var info = {nome:file.name, cat:selCat.value, size:file.size, ts:Date.now(), mime:file.type};
+        var info = {nome:file.name, cat:selCat.value, size:file.size, ts:Date.now(), mime:file.type||'application/pdf'};
         if(!DOCS[m.rg]) DOCS[m.rg]={};
         DOCS[m.rg][id]=info; meta=DOCS[m.rg];
-        desenha(); toast('Documento anexado.','ok');
-        if(DB){
-          DB.ref(NS+'/docs/'+m.rg+'/'+id).set(info).catch(function(){ persistWarn('Falha ao gravar metadados do documento.'); });
-          DB.ref(NS+'/docdata/'+id).set({b64:rd.result}).catch(function(){ persistWarn('Falha ao enviar o arquivo "'+file.name+'" ao banco.'); });
-        } else { info._local = rd.result; persistWarn('Sem conexão — o documento "'+file.name+'" ficou só neste dispositivo.'); }
+        desenha();
         auditar('doc_upload', m.rg, file.name);
+        if(!DB){ info._local = rd.result; persistWarn('Sem conexão — o documento "'+file.name+'" ficou só neste aparelho e NÃO está no banco.'); return; }
+        toast('⏳ Enviando "'+file.name+'"…');
+        var pMeta, pDado;
+        try{
+          pMeta = DB.ref(NS+'/docs/'+m.rg+'/'+id).set(info);
+          pDado = DB.ref(NS+'/docdata/'+id).set({b64:rd.result});
+        }catch(e){
+          info._local = rd.result;
+          persistWarn('Documento "'+file.name+'" NÃO foi enviado: '+motivoErro(e));
+          return;
+        }
+        Promise.all([pMeta,pDado]).then(function(){
+          return DB.ref(NS+'/docdata/'+id+'/b64').once('value');   // read-back: prova de que o arquivo está no banco
+        }).then(function(sn){
+          if(sn.val()){ toast('✔ Documento anexado e confirmado no banco.','ok'); }
+          else { info._local = rd.result; persistWarn('O banco não confirmou o arquivo "'+file.name+'". Ele ficou só neste aparelho.'); }
+        }).catch(function(e){
+          info._local = rd.result;
+          persistWarn('Documento "'+file.name+'" NÃO chegou ao banco: '+motivoErro(e), function(){ enviar(file); });
+        });
       };
       rd.readAsDataURL(file);
     }
     function baixar(d){
+      /* dataURL grande em <a download> falha em vários navegadores Android/iOS:
+         converter para Blob + objectURL resolve e ainda permite abrir em nova aba. */
       function abre(dataURL){
-        var a = el('a',{href:dataURL,download:d.nome}); document.body.appendChild(a); a.click(); a.remove();
+        try{
+          var parte = String(dataURL).split(','), mime=(/data:([^;]+)/.exec(parte[0])||[])[1]||d.mime||'application/octet-stream';
+          var bin = atob(parte[1]), n=bin.length, arr=new Uint8Array(n);
+          while(n--) arr[n]=bin.charCodeAt(n);
+          var url = URL.createObjectURL(new Blob([arr],{type:mime}));
+          var a = el('a',{href:url,download:d.nome,target:'_blank',rel:'noopener'});
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+        }catch(e){
+          var a2 = el('a',{href:dataURL,download:d.nome}); document.body.appendChild(a2); a2.click(); a2.remove();
+        }
       }
       if(d._local){ abre(d._local); return; }
       if(!DB){ toast('Sem conexão com o banco.','erro'); return; }
@@ -2012,7 +2451,12 @@ function renderPublico(app, tk){
 function boot(){
   var ovrLS = lsGet('ovr'); if(ovrLS) OVR = ovrLS;
   var cfgLS = lsGet('cfg'); if(cfgLS) CFG = Object.assign(CFG, cfgLS);
+  var filaLS = lsGet('fila'); if(filaLS && filaLS.length){
+    FILA = filaLS;
+    persistWarn(FILA.length+' alteração(ões) ainda não chegaram ao banco (ficaram deste aparelho na última sessão).', escoaFila);
+  }
   initFirebase();
+  setTimeout(function(){ if(DB && FILA.length) escoaFila(); }, 2500);
   if(!location.hash){
     if(/[?&]tv=1/.test(location.search) || lsGet('tvMode')) irPara('tv');
     else irPara('login');
