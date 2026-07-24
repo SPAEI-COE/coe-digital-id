@@ -60,6 +60,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .login-tv{display:block;text-align:center;margin-top:1em;font-size:.8rem;color:var(--azul-700);font-weight:600;text-decoration:none}
 .login-msg{margin-top:.9em;font-size:.8rem;color:var(--erro);font-weight:600;text-align:center;min-height:1.2em}
 .login-off{margin-top:.8em;text-align:center;font-size:.72rem;color:var(--alerta);font-weight:600}
+.login-aviso{margin-top:.9em;padding:.8em .9em;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);text-align:center;font-size:.76rem;font-weight:600;color:#fecaca;line-height:1.45}
+.login-aviso a{color:#fff;text-decoration:underline;word-break:break-all}
+.login-pino{display:flex;justify-content:center;margin-top:1em}
 .credito{margin-top:1.1em;text-align:center;font-size:.62rem;color:var(--prata-400);letter-spacing:.05em}
 
 /* ===== CARD INSTITUCIONAL (base compartilhada admin/TV) ===== */
@@ -122,6 +125,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .pino{display:inline-flex;align-items:center;gap:.4em;font-size:.7rem;font-weight:600;color:var(--prata-300)}
 .pino i{width:.6em;height:.6em;border-radius:50%;background:var(--erro)}
 .pino.on i{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.pino.on{color:var(--ok)}
 .adm-user{font-size:.75rem;font-weight:600;text-align:right;line-height:1.2}
 .adm-user small{color:var(--prata-300);font-weight:400;display:block;font-size:.62rem}
 .adm-lado{background:#fff;border-right:1px solid var(--prata-200);padding:1em .7em;display:flex;flex-direction:column;gap:.2em}
@@ -627,7 +631,13 @@ function renderLogin(app){
       el('label',{text:'Senha'}), inSenha,
       btn, msg,
       DB?null:el('div',{cls:'login-off',text:'⚠ Sem conexão com o banco — modo local'}),
-      origemValida()?null:el('div',{cls:'login-off',text:'⚠ Arquivo aberto direto do aparelho. Use o endereço publicado: spaei-coe.github.io/coe-digital-id/coe-p1-funcional.html'}),
+      origemValida()?null:el('div',{cls:'login-aviso'},[
+        '⚠ Login não funciona neste arquivo aberto direto do aparelho. Abra pelo endereço publicado: ',
+        el('a',{href:'https://spaei-coe.github.io/coe-digital-id/coe-p1-funcional.html',target:'_blank'},['spaei-coe.github.io/coe-digital-id/coe-p1-funcional.html'])
+      ]),
+      el('div',{cls:'login-pino'},[
+        el('span',{cls:'pino'+(ONLINE?' on':''),id:'pino'},[el('i'),el('span',{text:ONLINE?'Online':'Offline'})])
+      ]),
       el('a',{cls:'login-tv',href:'#/tv'},['▶ Abrir painel da televisão']),
       el('div',{cls:'credito',text:'Desenvolvido por PM Elomir Gumiero de Moraes'})
     ])
