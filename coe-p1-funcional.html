@@ -252,7 +252,21 @@ var SHARE = {};          // tokens (só admin)
 var SESS = null;
 var DB = null;           // referência RTDB (null = offline/local)
 var AUTH = null;         // Firebase Authentication (substitui o hash caseiro)
+var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
+var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
+/* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
+   Não é segredo: o Firebase a expõe no cliente. Sem ela o Authentication não inicia.
+   Pode ser injetada em runtime por localStorage: coep1_apikey */
+var FB_API_KEY = (function(){ try{ return JSON.parse(localStorage.getItem('coep1_apikey')||'""') || ''; }catch(e){ return ''; } })() || '';
+function origemValida(){ return location.protocol==='http:' || location.protocol==='https:'; }
+function authOK(){ return !!AUTH && !!FB_API_KEY && origemValida(); }
+function motivoAuth(){
+  if(!origemValida()) return 'Este arquivo foi aberto direto do aparelho ('+location.protocol+'). O login exige o endereço publicado na internet.';
+  if(!FB_API_KEY) return 'Chave de API do Firebase não configurada neste arquivo.';
+  if(!AUTH) return AUTH_ERRO || 'Serviço de autenticação indisponível.';
+  return '';
+}
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false };
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
@@ -422,7 +436,7 @@ function initFirebase(){
   if(typeof firebase==='undefined'){ ONLINE=false; return; }
   try{
     firebase.initializeApp({
-      apiKey:'AIzaSyD7jmRxODElRmpvVl8N6C8LUrNzTc-Ke7Q',
+      apiKey: FB_API_KEY || undefined,
       authDomain:'spaei-digital-coe.firebaseapp.com',
       databaseURL:'https://spaei-digital-coe-default-rtdb.firebaseio.com',
       projectId:'spaei-digital-coe',
@@ -431,7 +445,10 @@ function initFirebase(){
       appId:'1:441045974967:web:4c3e685b0ca218cb363232'
     });
     DB = firebase.database();
-    try{ AUTH = firebase.auth(); }catch(e2){ AUTH = null; }
+    try{
+      if(!FB_API_KEY){ AUTH=null; AUTH_ERRO='Chave de API do Firebase não configurada neste arquivo.'; }
+      else AUTH = firebase.auth();
+    }catch(e2){ AUTH = null; AUTH_ERRO = 'Falha ao iniciar o Authentication: '+(e2.code||e2.message||e2); }
     DB.ref('.info/connected').on('value', function(s){
       ONLINE = !!s.val();
       var p=$('#pino'); if(p){ p.classList.toggle('on', ONLINE); p.lastChild.textContent = ONLINE?'Banco conectado':'Sem conexão'; }
@@ -494,14 +511,57 @@ function renderLogin(app){
       }
       var a = adm[rg];
       if(!a){ falha(); return; }
-      if(!AUTH){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; msg.textContent='Sem conexão com o serviço de autenticação.'; return; }
+      /* Auth indisponível (arquivo local, sem apiKey, sem rede):
+         só entra pelo hash antigo, se ele existir — e avisa que está em modo legado. */
+      if(!authOK()){
+        if(!a.hash){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; msg.textContent=motivoAuth(); return; }
+        sha256(rg+':'+senha+':COEP1').then(function(h){
+          if(h!==a.hash){ falha(); return; }
+          MODO_LEGADO = motivoAuth();
+          concluir(a);
+        });
+        return;
+      }
       AUTH.signInWithEmailAndPassword(emailAdmin(rg), senha).then(function(){
-        SESS={rg:rg,nome:a.nome||('RG '+rg),nivel:a.nivel||'adm',exp:Date.now()+12*3600e3};
-        lsSet('sess',SESS); auditar('login','','');
-        irPara('admin');
-      }).catch(function(){ falha(); });
+        concluir(a);
+      }).catch(function(e){
+        var c = e && e.code || '';
+        /* Migração: admin criado no esquema antigo ainda não tem conta no Authentication.
+           Confere o hash gravado e, se bater, cria a conta e apaga o hash do banco. */
+        if(c==='auth/user-not-found' && a.hash){
+          sha256(rg+':'+senha+':COEP1').then(function(h){
+            if(h!==a.hash){ falha(); return; }
+            AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
+              a.uid = cred.user.uid; delete a.hash;
+              ADMINS[rg]=a; lsSet('admins',ADMINS);
+              gravar('admins/'+rg, a, 'migração da senha do RG '+rg+' para o Authentication');
+              auditar('migracao_senha','', 'RG '+rg);
+              concluir(a);
+            }).catch(function(e2){ erroAuth(e2); });
+          });
+          return;
+        }
+        if(c==='auth/wrong-password' || c==='auth/invalid-credential' || c==='auth/user-not-found' || c==='auth/invalid-login-credentials'){ falha(); return; }
+        erroAuth(e);
+      });
     });
+    function concluir(a){
+      SESS={rg:inRG.value.replace(/\D/g,''),nome:a.nome||('RG '+inRG.value),nivel:a.nivel||'adm',exp:Date.now()+12*3600e3};
+      lsSet('sess',SESS); auditar('login','','');
+      irPara('admin');
+    }
     function falha(){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; msg.textContent='RG ou senha inválidos.'; }
+    function erroAuth(e){
+      btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+      var c = e && e.code || '';
+      var t = c==='auth/operation-not-allowed' ? 'O provedor E-mail/senha está desativado no console do Firebase.'
+            : c==='auth/invalid-api-key' || c==='auth/api-key-not-valid' ? 'Chave de API do Firebase inválida.'
+            : c==='auth/unauthorized-domain' ? 'Este endereço não está autorizado no Firebase Authentication.'
+            : c==='auth/network-request-failed' ? 'Sem rede para falar com o serviço de autenticação.'
+            : c==='auth/too-many-requests' ? 'Muitas tentativas. Aguarde alguns minutos.'
+            : ('Falha na autenticação'+(c?' ('+c+')':'')+'.');
+      msg.textContent = t;
+    }
   }
   function primeiroAcesso(rg, senha){
     var s2 = el('input',{type:'password',placeholder:'Repita a senha'});
@@ -513,7 +573,7 @@ function renderLogin(app){
       {rotulo:'Criar administrador-raiz', cls:'btn-azul', acao:function(f){
         if(s2.value!==senha){ toast('As senhas não conferem.','erro'); return; }
         if(senha.length<6){ toast('Use ao menos 6 caracteres.','erro'); return; }
-        if(!AUTH){ toast('Sem conexão com o serviço de autenticação.','erro'); return; }
+        if(!authOK()){ toast(motivoAuth(),'erro'); return; }
         AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
           ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:cred.user.uid, ts:Date.now()};
           lsSet('admins',ADMINS);
@@ -537,6 +597,7 @@ function renderLogin(app){
       el('label',{text:'Senha'}), inSenha,
       btn, msg,
       DB?null:el('div',{cls:'login-off',text:'⚠ Sem conexão com o banco — modo local'}),
+      origemValida()?null:el('div',{cls:'login-off',text:'⚠ Arquivo aberto direto do aparelho. Use o endereço publicado: spaei-coe.github.io/coe-digital-id/coe-p1-funcional.html'}),
       el('a',{cls:'login-tv',href:'#/tv'},['▶ Abrir painel da televisão']),
       el('div',{cls:'credito',text:'Desenvolvido por PM Elomir Gumiero de Moraes'})
     ])
@@ -781,6 +842,7 @@ function renderAdmin(app){
   app.innerHTML='';
   var busca = el('input',{placeholder:'Buscar por nome, RG, função…',value:VIEW.filtro.q,oninput:debounce(function(e){ VIEW.filtro.q=e.target.value; VIEW.abaAdm='efetivo'; renderRota(); },250)});
   var raiz = el('div',{cls:'adm'},[
+    MODO_LEGADO?el('div',{style:'grid-column:1/-1;background:#7a2b00;color:#ffd9b0;padding:.5em 1em;font-size:.78rem;font-weight:600',text:'⚠ Sessão aberta pelo esquema antigo de senha (hash no banco). Motivo: '+MODO_LEGADO}):null,
     el('header',{cls:'adm-topo'},[
       el('img',{src:window.__BRASAO__,alt:''}),
       el('div',{},[el('div',{cls:'t1',text:'COE P1 Funcional'}),el('div',{cls:'t2',text:'Painel administrativo'})]),
