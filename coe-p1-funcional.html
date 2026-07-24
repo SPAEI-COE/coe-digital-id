@@ -254,6 +254,7 @@ var DB = null;           // referência RTDB (null = offline/local)
 var AUTH = null;         // Firebase Authentication (substitui o hash caseiro)
 var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
+var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
 function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
 /* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
    Não é segredo: o Firebase a expõe no cliente. Sem ela o Authentication não inicia.
@@ -449,6 +450,10 @@ function initFirebase(){
       if(!FB_API_KEY){ AUTH=null; AUTH_ERRO='Chave de API do Firebase não configurada neste arquivo.'; }
       else AUTH = firebase.auth();
     }catch(e2){ AUTH = null; AUTH_ERRO = 'Falha ao iniciar o Authentication: '+(e2.code||e2.message||e2); }
+    if(AUTH){
+      AUTH.onAuthStateChanged(function(){ AUTH_PRONTO = true; renderRota(); });
+      setTimeout(function(){ if(!AUTH_PRONTO){ AUTH_PRONTO = true; renderRota(); } }, 8000);
+    }
     DB.ref('.info/connected').on('value', function(s){
       ONLINE = !!s.val();
       var p=$('#pino'); if(p){ p.classList.toggle('on', ONLINE); p.lastChild.textContent = ONLINE?'Banco conectado':'Sem conexão'; }
@@ -476,15 +481,24 @@ function renderRota(){
   if(/^v\//.test(r)){ VIEW.rota='pub'; renderPublico(app, r.slice(2)); return; }
   if(r==='tv'){ VIEW.rota='tv'; renderTV(app); return; }
   if(r==='admin'){
-    if(!sessValida()){ irPara('login'); return; }
+    var v = sessValida();
+    if(v==='aguarde'){ VIEW.rota='adm'; app.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;color:#9fb0c8;font:600 .9rem system-ui">Verificando sessão…</div>'; return; }
+    if(!v){ irPara('login'); return; }
     VIEW.rota='adm'; renderAdmin(app); return;
   }
   VIEW.rota='login'; renderLogin(app);
 }
 function sessValida(){
   if(!SESS){ SESS = lsGet('sess'); }
-  if(SESS && SESS.exp > Date.now()) return true;
-  SESS=null; lsDel('sess'); return false;
+  if(!SESS || SESS.exp <= Date.now()){ SESS=null; lsDel('sess'); return false; }
+  /* Sessão só vale se estiver lastreada por uma sessão real do Firebase Authentication.
+     Sessão antiga gravada no aparelho, ou aberta pelo fallback de hash, não abre o painel
+     quando o Auth está disponível — precisa digitar a senha de novo. */
+  if(authOK()){
+    if(!AUTH_PRONTO) return 'aguarde';
+    if(!AUTH.currentUser || SESS.legado){ SESS=null; lsDel('sess'); return false; }
+  }
+  return true;
 }
 
 /* ============================================================
@@ -546,7 +560,7 @@ function renderLogin(app){
       });
     });
     function concluir(a){
-      SESS={rg:inRG.value.replace(/\D/g,''),nome:a.nome||('RG '+inRG.value),nivel:a.nivel||'adm',exp:Date.now()+12*3600e3};
+      SESS={rg:inRG.value.replace(/\D/g,''),nome:a.nome||('RG '+inRG.value),nivel:a.nivel||'adm',exp:Date.now()+12*3600e3,legado:!!MODO_LEGADO};
       lsSet('sess',SESS); auditar('login','','');
       irPara('admin');
     }
