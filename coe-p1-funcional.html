@@ -84,6 +84,12 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .card-pm__tags{display:flex;gap:.35em;flex-wrap:wrap;margin-top:.1em}
 .tag{font-size:.55em;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:.25em .6em;border-radius:3px}
 .tag-ok{background:#e3f5ea;color:var(--ok)}.tag-alerta{background:#fdf1e0;color:var(--alerta)}.tag-erro{background:#fbe7e4;color:var(--erro)}.tag-azul{background:#e6e6f7;color:var(--azul-700)}.tag-cinza{background:var(--prata-200);color:var(--grafite-700)}
+.tags-sel{display:flex;flex-wrap:wrap;gap:.4em;margin-bottom:.4em}
+.tagbtn{font-size:.68rem;font-weight:700;padding:.4em .8em;border-radius:20px;border:1.5px solid var(--prata-200);background:#fff;color:var(--grafite-700);cursor:pointer}
+.tagbtn.on{background:var(--azul-700);border-color:var(--azul-700);color:#fff}
+.sep-dash{font-family:var(--display);text-transform:uppercase;font-size:.7rem;letter-spacing:.08em;color:var(--grafite-700);font-weight:700;margin:1.1em 0 .5em;padding-bottom:.25em;border-bottom:1px solid var(--prata-200)}
+.sep-dash:first-of-type{margin-top:0}
+.barra-sec.clic{cursor:pointer}.barra-sec.clic:hover .rot{color:var(--azul-700)}
 
 /* ===== TV ===== */
 .tv{height:100vh;background:radial-gradient(1400px 800px at 50% -15%,var(--azul-700),var(--azul-800) 50%,var(--azul-900));display:flex;flex-direction:column;overflow:hidden}
@@ -258,6 +264,7 @@ var DB = null;           // referência RTDB (null = offline/local)
 var AUTH = null;         // Firebase Authentication (substitui o hash caseiro)
 var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
+var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
 function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
 /* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
@@ -275,6 +282,9 @@ function motivoAuth(){
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false };
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
+var ESPECIALIDADES = ['Blindados','Máquinas Pesadas','Demolição/Explosivos (EOD)','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Condutor de Viaturas Especiais','Telemática/TI','Instrutor'];
+var TIPOS_SANGUINEOS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+var NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ORDEM_PADRAO = ["CMT","SUBCMT","PROJETOS","P1","P2","P3","P4","P5","AJD","ALMOXARIFADO","NAOE","OBRAS","DEMOLIÇÃO","BLINDADOS","RUMB","FISCAL DE DIA","APOIO/DIVERSOS"];
 var RAIZ_RG = '82061';
 var NS = 'coep1';
@@ -314,6 +324,21 @@ function sha256(txt){
   return Promise.reject(new Error('crypto indisponível'));
 }
 function bytesFmt(n){ return n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
+function idade(nascISO){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(nascISO||''); if(!m) return null;
+  var hj=new Date(), n=Number(m[1]), me=Number(m[2])-1, d=Number(m[3]);
+  var a = hj.getFullYear()-n;
+  if(hj.getMonth()<me || (hj.getMonth()===me && hj.getDate()<d)) a--;
+  return (a>=0 && a<130) ? a : null;
+}
+function faixaEtaria(nascISO){
+  var a = idade(nascISO); if(a==null) return null;
+  if(a<=30) return '18–30'; if(a<=40) return '31–40'; if(a<=50) return '41–50'; if(a<=60) return '51–60';
+  return '61+';
+}
+function mesAniversario(nascISO, mesRef){
+  var m=/^\d{4}-(\d{2})-(\d{2})/.exec(nascISO||''); return !!(m && Number(m[1])===mesRef);
+}
 
 /* ---------- toast e aviso persistente (rito: falha de sync = aviso persistente) ---------- */
 function toast(msg, tipo){
@@ -361,6 +386,18 @@ function confirmar(msg, aoConfirmar){
     {rotulo:'Cancelar'},
     {rotulo:'Confirmar', cls:'btn-erro', acao:function(f){ f(); aoConfirmar(); }}
   ]);
+}
+function abrirListaDrawer(titulo, lista){
+  var corpo = el('div');
+  corpo.appendChild(el('p',{style:'font-size:.75rem;color:#4a5262;margin-bottom:.6em',text:lista.length+' militar(es)'}));
+  if(!lista.length){
+    corpo.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262',text:'Nenhum militar neste grupo.'}));
+  } else {
+    var grade = el('div',{cls:'grade-adm'});
+    lista.forEach(function(m){ grade.appendChild(cardPM(m,{click:abrirFicha})); });
+    corpo.appendChild(grade);
+  }
+  modal(titulo, corpo, [{rotulo:'Fechar'}], 'ficha');
 }
 
 /* ============================================================
@@ -465,6 +502,7 @@ function initFirebase(){
     DB.ref(NS+'/mil').on('value', function(s){ OVR = s.val()||{}; espelhoLocal(); renderRota(); });
     DB.ref(NS+'/fotos').on('value', function(s){ FOTOS = s.val()||{}; renderRota(); });
     DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v){ CFG = Object.assign({escala:100,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[]}, v); espelhoLocal(); renderRota(); } });
+    DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; renderRota(); });
   }catch(e){ DB=null; ONLINE=false; }
 }
 function carregaAdmins(){
@@ -540,7 +578,8 @@ function renderLogin(app){
         });
         return;
       }
-      AUTH.signInWithEmailAndPassword(emailAdmin(rg), senha).then(function(){
+      var mail = a.email || emailAdmin(rg);
+      AUTH.signInWithEmailAndPassword(mail, senha).then(function(){
         concluir(a);
       }).catch(function(e){
         var c = e && e.code || '';
@@ -549,7 +588,7 @@ function renderLogin(app){
         if(c==='auth/user-not-found' && a.hash){
           sha256(rg+':'+senha+':COEP1').then(function(h){
             if(h!==a.hash){ falha(); return; }
-            AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
+            AUTH.createUserWithEmailAndPassword(mail, senha).then(function(cred){
               a.uid = cred.user.uid; delete a.hash;
               ADMINS[rg]=a; lsSet('admins',ADMINS);
               gravar('admins/'+rg, a, 'migração da senha do RG '+rg+' para o Authentication');
@@ -619,6 +658,27 @@ function renderLogin(app){
       }}
     ]);
   }
+  function esqueciSenha(){
+    var iRG2 = el('input',{inputmode:'numeric',placeholder:'RG'});
+    modal('Esqueci minha senha', el('div',{},[
+      el('p',{cls:'nota-info',text:'Informe seu RG. Se houver um e-mail de recuperação cadastrado, enviaremos um link para definir uma nova senha.'}),
+      el('div',{cls:'campo'},[el('label',{text:'RG'}),iRG2])
+    ]),[
+      {rotulo:'Cancelar'},
+      {rotulo:'Enviar link', cls:'btn-azul', acao:function(f){
+        var rg2 = iRG2.value.replace(/\D/g,'');
+        if(!rg2){ toast('Informe o RG.','erro'); return; }
+        if(!authOK()){ toast(motivoAuth(),'erro'); return; }
+        carregaAdmins().then(function(adm){
+          var a = adm[rg2];
+          if(!a || !a.email){ toast('Nenhum e-mail de recuperação cadastrado para este RG. Peça ao administrador-raiz para cadastrar um em Administradores.','erro'); return; }
+          AUTH.sendPasswordResetEmail(a.email).then(function(){
+            toast('E-mail de redefinição enviado.','ok'); f();
+          }).catch(function(e){ toast('Falha ao enviar: '+(e.message||e.code),'erro'); });
+        });
+      }}
+    ]);
+  }
   var cartao = el('div',{cls:'login-cartao'},[
     el('div',{cls:'login-topo'},[
       el('img',{src:window.__BRASAO__,alt:'Brasão do COE'}),
@@ -630,6 +690,7 @@ function renderLogin(app){
       el('label',{text:'RG'}), inRG,
       el('label',{text:'Senha'}), inSenha,
       btn, msg,
+      el('a',{href:'#',style:'font-size:.72rem;color:var(--azul-700);text-align:center;display:block;margin:.2em 0 .4em',onclick:function(e){ e.preventDefault(); esqueciSenha(); }},['Esqueci minha senha']),
       DB?null:el('div',{cls:'login-off',text:'⚠ Sem conexão com o banco — modo local'}),
       origemValida()?null:el('div',{cls:'login-aviso'},[
         '⚠ Login não funciona neste arquivo aberto direto do aparelho. Abra pelo endereço publicado: ',
@@ -870,6 +931,7 @@ function renderTV(app){
    ============================================================ */
 var MENU = [
   {id:'dash', rot:'📊 Dashboard'},
+  {id:'rel', rot:'📈 Relatórios'},
   {id:'efetivo', rot:'🪖 Efetivo'},
   {id:'secoes', rot:'🗂 Seções & Pastas'},
   {id:'tvcfg', rot:'📺 Configuração da TV'},
@@ -901,7 +963,7 @@ function renderAdmin(app){
   ]);
   app.appendChild(raiz);
   var main = $('#admMain');
-  ({dash:vDash,efetivo:vEfetivo,secoes:vSecoes,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins}[VIEW.abaAdm]||vDash)(main);
+  ({dash:vDash,rel:vRelatorios,efetivo:vEfetivo,secoes:vSecoes,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins}[VIEW.abaAdm]||vDash)(main);
 }
 
 /* ---- Dashboard ---- */
@@ -910,27 +972,174 @@ function vDash(main){
   var comFoto = tudo.filter(function(m){ return FOTOS[m.rg]; }).length;
   var venc = tudo.filter(function(m){ var v=vencMaisProximo(m); return v && v.dias<=60; }).length;
   var vencidos = tudo.filter(function(m){ var v=vencMaisProximo(m); return v && v.dias<0; }).length;
+  var adidos = tudo.filter(function(m){ return m.adido; }).length;
+  var ativos = tudo.filter(function(m){ return (m.situacao||'ATIVO')==='ATIVO'; }).length;
+  var comNasc = tudo.filter(function(m){ return (m.ficha.ident||{}).nasc; }).length;
+  var comSexo = tudo.filter(function(m){ return (m.ficha.ident||{}).sexo; }).length;
   main.appendChild(el('div',{cls:'adm-h1'},['Dashboard']));
-  var kpis = el('div',{cls:'kpis'},[
-    kpi(tudo.length,'Efetivo total'),
-    kpi(comFoto+' / '+tudo.length,'Com foto anexada','ouro',function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:'semfoto'}; VIEW.abaAdm='efetivo'; renderRota(); }),
-    kpi(venc,'Vencimentos ≤ 60 dias','alerta',function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:'venc'}; VIEW.abaAdm='efetivo'; renderRota(); }),
-    kpi(vencidos,'Documentos vencidos','erro',function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:'vencido'}; VIEW.abaAdm='efetivo'; renderRota(); })
-  ]);
-  main.appendChild(kpis);
   function kpi(n,l,cls,clique){
     return el('div',{cls:'kpi '+(cls||'')+(clique?' clic':''),onclick:clique||null},[el('div',{cls:'n',text:String(n)}),el('div',{cls:'l',text:l})]);
   }
-  var pn = el('div',{cls:'painel'},[el('h3',{text:'Distribuição por seção'})]);
+  function irEfetivo(sit){ return function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:sit||''}; VIEW.abaAdm='efetivo'; renderRota(); }; }
+
+  main.appendChild(el('div',{cls:'sep-dash',text:'Efetivo'}));
+  main.appendChild(el('div',{cls:'kpis'},[
+    kpi(tudo.length,'Efetivo total','',irEfetivo('')),
+    kpi(ativos,'Em atividade (ATIVO)','ouro',function(){ abrirListaDrawer('Em atividade', tudo.filter(function(m){return (m.situacao||'ATIVO')==='ATIVO';})); }),
+    kpi(adidos,'Adidos','',irEfetivo('adido')),
+    kpi(tudo.length-adidos,'Efetivo próprio (COE)','',function(){ abrirListaDrawer('Efetivo próprio (COE)', tudo.filter(function(m){return !m.adido;})); })
+  ]));
+
+  main.appendChild(el('div',{cls:'sep-dash',text:'Documentação'}));
+  main.appendChild(el('div',{cls:'kpis'},[
+    kpi(comFoto+' / '+tudo.length,'Com foto anexada','ouro',irEfetivo('semfoto')),
+    kpi(venc,'Vencimentos ≤ 60 dias','alerta',irEfetivo('venc')),
+    kpi(vencidos,'Documentos vencidos','erro',irEfetivo('vencido'))
+  ]));
+
+  main.appendChild(el('div',{cls:'sep-dash',text:'Perfil do efetivo (dados para relatórios)'}));
+  main.appendChild(el('div',{cls:'kpis'},[
+    kpi(comNasc+' / '+tudo.length,'Com data de nascimento','',function(){ VIEW.abaAdm='rel'; renderRota(); }),
+    kpi(comSexo+' / '+tudo.length,'Com sexo cadastrado','',function(){ VIEW.abaAdm='rel'; renderRota(); })
+  ]));
+  main.appendChild(el('div',{style:'margin-bottom:1.1em'},[el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ VIEW.abaAdm='rel'; renderRota(); }},['📈 Ver relatórios completos'])]));
+
+  var pn = el('div',{cls:'painel'},[el('h3',{text:'Distribuição por seção (clique para ver o efetivo)'})]);
   var max = 1, dados = ordemSecoes().filter(function(s){return s[0]!=='@';}).map(function(s){ var n=membrosSecao(s).length; if(n>max)max=n; return {s:s,n:n}; }).filter(function(d){return d.n;});
   dados.forEach(function(d){
-    pn.appendChild(el('div',{cls:'barra-sec'},[
+    pn.appendChild(el('div',{cls:'barra-sec'+(d.n?' clic':''),onclick:d.n?function(){ abrirListaDrawer(nomeSecao(d.s), membrosSecao(d.s)); }:null},[
       el('div',{cls:'rot',text:d.s}),
       el('div',{cls:'tr'},[el('i',{style:'width:'+(d.n/max*100)+'%'})]),
       el('div',{cls:'num mono',text:String(d.n)})
     ]));
   });
   main.appendChild(pn);
+}
+
+/* ---- Relatórios ---- */
+function vRelatorios(main){
+  var tudo = efetivo();
+  main.appendChild(el('div',{cls:'adm-h1'},['Relatórios']));
+
+  function grupo(rot, filtroFn){ var lista = tudo.filter(filtroFn); return {rot:rot, n:lista.length, lista:lista}; }
+  function painelBarras(titulo, grupos){
+    var pn = el('div',{cls:'painel'},[el('h3',{text:titulo})]);
+    var max=1; grupos.forEach(function(g){ if(g.n>max) max=g.n; });
+    grupos.forEach(function(g){
+      pn.appendChild(el('div',{cls:'barra-sec'+(g.n?' clic':''),onclick:g.n?function(){ abrirListaDrawer(titulo+' — '+g.rot, g.lista); }:null},[
+        el('div',{cls:'rot',text:g.rot}),
+        el('div',{cls:'tr'},[el('i',{style:'width:'+(g.n/max*100)+'%'})]),
+        el('div',{cls:'num mono',text:String(g.n)})
+      ]));
+    });
+    main.appendChild(pn);
+  }
+
+  // Destaque do mês (curadoria manual)
+  var agora = new Date(), chaveMes = agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0');
+  var dest = DESTAQUES[chaveMes];
+  var painelDestaque = el('div',{cls:'painel'});
+  painelDestaque.appendChild(el('h3',{text:'🏅 Destaque do mês — '+NOMES_MES[agora.getMonth()]+'/'+agora.getFullYear()}));
+  if(dest && militar(dest.rg)){
+    var md0 = militar(dest.rg);
+    var f0 = el('div',{cls:'card-pm__foto',style:'width:70px;flex:0 0 70px'});
+    if(FOTOS[md0.rg]) f0.appendChild(el('img',{src:FOTOS[md0.rg],alt:''})); else f0.appendChild(iconeSemFoto());
+    painelDestaque.appendChild(el('div',{style:'display:flex;gap:1em;align-items:center;cursor:pointer',onclick:function(){ abrirFicha(md0); }},[
+      f0,
+      el('div',{},[
+        el('div',{style:'font-weight:700;color:var(--azul-900)',text:md0.nome+' — '+md0.posto}),
+        dest.motivo?el('div',{style:'font-size:.78rem;color:var(--grafite-700);margin-top:.2em',text:dest.motivo}):null,
+        el('div',{style:'font-size:.68rem;color:#8a93a3;margin-top:.3em',text:'Indicado por RG '+dest.por})
+      ])
+    ]));
+  } else {
+    painelDestaque.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262',text:'Nenhum destaque definido para este mês.'}));
+  }
+  painelDestaque.appendChild(el('div',{style:'margin-top:.8em'},[el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ definirDestaque(chaveMes); }},['🏅 Definir destaque do mês'])]));
+  main.appendChild(painelDestaque);
+
+  // Aniversariantes do mês
+  var painelAniv = el('div',{cls:'painel'});
+  painelAniv.appendChild(el('h3',{text:'🎂 Aniversariantes'}));
+  var selMes = el('select',{style:'margin-bottom:.7em'});
+  NOMES_MES.forEach(function(nm,i){ selMes.appendChild(el('option',{value:String(i+1),text:nm,selected:(i===agora.getMonth())?'':null})); });
+  var boxAniv = el('div');
+  function pintaAniv(){
+    var mesN = Number(selMes.value);
+    var lst = tudo.filter(function(m){ return mesAniversario((m.ficha.ident||{}).nasc, mesN); }).sort(function(a,b){
+      var da=Number(/-\d{2}-(\d{2})/.exec((a.ficha.ident||{}).nasc)[1]), db=Number(/-\d{2}-(\d{2})/.exec((b.ficha.ident||{}).nasc)[1]); return da-db;
+    });
+    boxAniv.innerHTML='';
+    if(!lst.length){ boxAniv.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262',text:'Nenhum aniversariante neste mês (ou data de nascimento não cadastrada).'})); return; }
+    var t = el('table',{cls:'tb'},[el('thead',{},[el('tr',{},[el('th',{text:'Dia'}),el('th',{text:'Nome'}),el('th',{text:'Posto'}),el('th',{text:'Seção'})])])]);
+    var c = el('tbody');
+    lst.forEach(function(m){
+      var dia = /-\d{2}-(\d{2})/.exec((m.ficha.ident||{}).nasc)[1];
+      c.appendChild(el('tr',{style:'cursor:pointer',onclick:function(){ abrirFicha(m); }},[el('td',{cls:'mono',text:dia}),el('td',{text:m.nome}),el('td',{text:m.posto}),el('td',{text:m.reparticao})]));
+    });
+    t.appendChild(c); boxAniv.appendChild(t);
+  }
+  selMes.addEventListener('change', pintaAniv);
+  painelAniv.appendChild(selMes); painelAniv.appendChild(boxAniv);
+  pintaAniv();
+  main.appendChild(painelAniv);
+
+  painelBarras('Efetivo por sexo', [
+    grupo('Masculino', function(m){ return (m.ficha.ident||{}).sexo==='M'; }),
+    grupo('Feminino', function(m){ return (m.ficha.ident||{}).sexo==='F'; }),
+    grupo('Não informado', function(m){ return !(m.ficha.ident||{}).sexo; })
+  ]);
+
+  painelBarras('Faixa etária', ['18–30','31–40','41–50','51–60','61+'].map(function(fx){
+    return grupo(fx, function(m){ return faixaEtaria((m.ficha.ident||{}).nasc)===fx; });
+  }).concat([grupo('Não informado', function(m){ return faixaEtaria((m.ficha.ident||{}).nasc)==null; })]));
+
+  painelBarras('Tipo sanguíneo', TIPOS_SANGUINEOS.map(function(t){
+    return grupo(t, function(m){ return (m.ficha.saude||{}).tipoSanguineo===t; });
+  }).concat([grupo('Não informado', function(m){ return !(m.ficha.saude||{}).tipoSanguineo; })]));
+
+  var cats = {}; tudo.forEach(function(m){ var c=(m.habilitacao||{}).categoria; if(c) cats[c]=true; });
+  painelBarras('Habilitação por categoria', Object.keys(cats).sort().map(function(c){
+    return grupo('Categoria '+c, function(m){ return (m.habilitacao||{}).categoria===c; });
+  }).concat([grupo('Sem habilitação cadastrada', function(m){ return !(m.habilitacao||{}).categoria; })]));
+
+  painelBarras('Especialidades técnicas', ESPECIALIDADES.map(function(e){
+    return grupo(e, function(m){ return ((m.ficha.func||{}).especialidades||[]).indexOf(e)>=0; });
+  }));
+
+  painelBarras('Situação atual', (function(){
+    var sits={}; tudo.forEach(function(m){ sits[m.situacao||'ATIVO']=true; });
+    return Object.keys(sits).sort().map(function(s){ return grupo(s, function(m){ return (m.situacao||'ATIVO')===s; }); });
+  })());
+}
+function definirDestaque(chaveMes){
+  var busca = el('input',{placeholder:'Buscar por nome ou RG…'});
+  var sel = el('select');
+  function repopula(q){
+    sel.innerHTML=''; sel.appendChild(el('option',{value:'',text:'— selecione —'}));
+    var qq=(q||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    efetivo().filter(function(m){ return !qq || (m.nome+' '+m.rg).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().indexOf(qq)>=0; })
+      .slice(0,40)
+      .forEach(function(m){ sel.appendChild(el('option',{value:m.rg,text:m.nome+' (RG '+m.rg+')'})); });
+  }
+  repopula('');
+  busca.addEventListener('input', debounce(function(e){ repopula(e.target.value); },200));
+  var motivo = el('textarea',{rows:'2',placeholder:'Motivo / justificativa (opcional)'});
+  modal('Definir destaque do mês', el('div',{cls:'form-gr'},[
+    el('div',{cls:'campo largo'},[el('label',{text:'Buscar militar'}),busca]),
+    el('div',{cls:'campo largo'},[el('label',{text:'Militar'}),sel]),
+    el('div',{cls:'campo largo'},[el('label',{text:'Motivo'}),motivo])
+  ]),[
+    {rotulo:'Cancelar'},
+    {rotulo:'Salvar', cls:'btn-azul', acao:function(f){
+      if(!sel.value){ toast('Selecione um militar.','erro'); return; }
+      var reg = {rg:sel.value, motivo:motivo.value.trim(), por:SESS.rg, ts:Date.now()};
+      DESTAQUES[chaveMes]=reg;
+      gravar('destaques/'+chaveMes, reg, 'destaque do mês '+chaveMes);
+      auditar('destaque_mes', sel.value, chaveMes);
+      f(); renderRota();
+    }}
+  ]);
 }
 
 /* ---- Efetivo ---- */
@@ -1140,6 +1349,7 @@ function abaIdent(area, m, md){
   ],{nome:m.nome,posto:m.posto,reparticao:m.reparticao,funcao:m.funcao,situacao:m.situacao,adido:m.adido});
   var extra = formCampos([
     {id:'guerra',rot:'Nome de guerra'},{id:'cpf',rot:'CPF',tipo:'text'},
+    {id:'sexo',rot:'Sexo',tipo:'select',ops:['','M','F']},
     {id:'nasc',rot:'Data de nascimento',tipo:'date'},{id:'natural',rot:'Naturalidade'},
     {id:'nacional',rot:'Nacionalidade'},{id:'estcivil',rot:'Estado civil',tipo:'select',ops:['','Solteiro(a)','Casado(a)','União estável','Divorciado(a)','Viúvo(a)']},
     {id:'pai',rot:'Nome do pai',largo:true},{id:'mae',rot:'Nome da mãe',largo:true},
@@ -1157,6 +1367,7 @@ function abaIdent(area, m, md){
   }));
 }
 function abaFunc(area, m, md){
+  var d = fichaGet(m,'func')||{};
   var f = formCampos([
     {id:'matricula',rot:'Matrícula (ID funcional)'},
     {id:'inclusao',rot:'Data de inclusão',tipo:'date'},
@@ -1169,9 +1380,23 @@ function abaFunc(area, m, md){
     {id:'afast',rot:'Afastamento em vigor'},
     {id:'movs',rot:'Movimentações',tipo:'textarea',largo:true},
     {id:'desig',rot:'Designações',tipo:'textarea',largo:true}
-  ], fichaGet(m,'func')||{});
+  ], d);
   area.appendChild(f.no);
-  area.appendChild(botaoSalvar(function(){ salvarFicha(m.rg,'func',f.ler()); toast('Dados funcionais salvos.','ok'); }));
+  area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin:1.1em 0 .6em',text:'Especialidades técnicas'}));
+  var espSel = (d.especialidades||[]).slice();
+  var espBox = el('div',{cls:'tags-sel'});
+  function pintaEsp(){
+    espBox.innerHTML='';
+    ESPECIALIDADES.forEach(function(nome){
+      var ativo = espSel.indexOf(nome)>=0;
+      espBox.appendChild(el('button',{type:'button',cls:'tagbtn'+(ativo?' on':''),onclick:function(){
+        var i=espSel.indexOf(nome); if(i>=0) espSel.splice(i,1); else espSel.push(nome); pintaEsp();
+      }},[nome]));
+    });
+  }
+  pintaEsp();
+  area.appendChild(espBox);
+  area.appendChild(botaoSalvar(function(){ var o=f.ler(); o.especialidades=espSel; salvarFicha(m.rg,'func',o); toast('Dados funcionais salvos.','ok'); }));
 }
 function abaHist(area, m){
   area.appendChild(el('p',{cls:'nota-info',text:'Linha do tempo da carreira — inclusão, promoções, cursos, movimentações e demais eventos.'}));
@@ -1196,6 +1421,7 @@ function abaSaude(area, m){
   var f = formCampos([
     {id:'aptidao',rot:'Aptidão',tipo:'select',ops:['','Apto','Apto A','Apto B','Apto C','Restrição','Inapto']},
     {id:'validade',rot:'Validade da inspeção',tipo:'date'},
+    {id:'tipoSanguineo',rot:'Tipo sanguíneo',tipo:'select',ops:[''].concat(TIPOS_SANGUINEOS)},
     {id:'restr',rot:'Restrições funcionais',tipo:'textarea',largo:true},
     {id:'obs',rot:'Observações',tipo:'textarea',largo:true}
   ], fichaGet(m,'saude')||{});
@@ -1546,7 +1772,7 @@ function vAdmins(main){
   carregaAdmins().then(function(adm){
     box.innerHTML='';
     var t = el('table',{cls:'tb'},[el('thead',{},[el('tr',{},[
-      el('th',{text:'RG'}),el('th',{text:'Nome'}),el('th',{text:'Nível'}),el('th',{text:''})
+      el('th',{text:'RG'}),el('th',{text:'Nome'}),el('th',{text:'Nível'}),el('th',{text:'E-mail de recuperação'}),el('th',{text:''})
     ])])]);
     var c = el('tbody'); t.appendChild(c);
     Object.keys(adm).forEach(function(rg){
@@ -1555,40 +1781,49 @@ function vAdmins(main){
         el('td',{cls:'mono',text:rg}),
         el('td',{text:a.nome||''}),
         el('td',{},[el('span',{cls:'tag '+(a.nivel==='raiz'?'tag-azul':'tag-cinza'),text:a.nivel==='raiz'?'Administrador-raiz':'Administrador'})]),
+        el('td',{},[a.email?el('span',{cls:'tag tag-ok',text:a.email}):el('span',{cls:'tag tag-alerta',text:'não cadastrado'})]),
         el('td',{},[
           rg===SESS.rg?el('button',{cls:'btn btn-borda btn-min',onclick:function(){ trocarSenha(rg); }},['Trocar minha senha']):null,
+          rg===SESS.rg?el('button',{cls:'btn btn-borda btn-min',onclick:function(){ definirEmailRecuperacao(rg); }},['E-mail de recuperação']):null,
+          (a.email && rg!==SESS.rg)?el('button',{cls:'btn btn-borda btn-min',onclick:function(){ confirmar('Enviar e-mail de redefinição de senha para '+a.email+'?',function(){ AUTH.sendPasswordResetEmail(a.email).then(function(){ toast('E-mail enviado.','ok'); auditar('admin_reset_email',rg,a.email); }).catch(function(e){ toast('Falha: '+(e.message||e.code),'erro'); }); }); }},['Enviar redefinição']):null,
           (a.nivel!=='raiz' && rg!==SESS.rg)?el('button',{cls:'btn btn-erro btn-min',onclick:function(){ confirmar('Remover o administrador RG '+rg+'?',function(){ delete ADMINS[rg]; lsSet('admins',ADMINS); gravar('admins/'+rg,null,'remoção de administrador'); auditar('admin_remover',rg,''); renderRota(); }); }},['Remover']):null
         ])
       ]));
     });
     box.appendChild(t);
-    box.appendChild(el('p',{style:'font-size:.7rem;color:#4a5262;margin-top:.7em',text:'O administrador-raiz (RG '+RAIZ_RG+') não pode ser removido nem rebaixado. Administradores nomeados podem nomear novos administradores. Senhas são gerenciadas pelo Firebase Authentication e nunca ficam gravadas neste banco de dados.'}));
+    box.appendChild(el('p',{style:'font-size:.7rem;color:#4a5262;margin-top:.7em',text:'O administrador-raiz (RG '+RAIZ_RG+') não pode ser removido nem rebaixado. Administradores nomeados podem nomear novos administradores. Senhas são gerenciadas pelo Firebase Authentication e nunca ficam gravadas neste banco de dados. Sem e-mail de recuperação cadastrado, um admin que esquecer a senha só pode ser restaurado manualmente no Firebase Console.'}));
   });
   function novoAdmin(){
     var iRG=el('input',{inputmode:'numeric',placeholder:'RG'}), iNome=el('input',{placeholder:'Nome de guerra / posto'}), iS=el('input',{type:'password',placeholder:'Senha inicial'});
+    var iEmail=el('input',{type:'email',placeholder:'nome@exemplo.com'});
     modal('Adicionar administrador', el('div',{cls:'form-gr'},[
       el('div',{cls:'campo'},[el('label',{text:'RG'}),iRG]),
       el('div',{cls:'campo'},[el('label',{text:'Nome'}),iNome]),
-      el('div',{cls:'campo largo'},[el('label',{text:'Senha inicial (mín. 6)'}),iS])
+      el('div',{cls:'campo largo'},[el('label',{text:'Senha inicial (mín. 6)'}),iS]),
+      el('div',{cls:'campo largo'},[el('label',{text:'E-mail de recuperação (opcional — necessário para "Esqueci minha senha")'}),iEmail])
     ]),[
       {rotulo:'Cancelar'},
       {rotulo:'Adicionar', cls:'btn-azul', acao:function(f){
         var rg=iRG.value.replace(/\D/g,'');
         if(!rg||iS.value.length<6){ toast('RG e senha (mín. 6) são obrigatórios.','erro'); return; }
+        var emailReal = iEmail.value.trim();
+        if(emailReal && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailReal)){ toast('E-mail inválido.','erro'); return; }
         if(!DB){ toast('Sem conexão com o banco — não é possível criar administradores offline.','erro'); return; }
+        var mail = emailReal || emailAdmin(rg);
         // app secundário: cria a conta sem derrubar a sessão de quem está logado agora
         var sec = firebase.initializeApp(firebase.app().options, 'sec_'+Date.now());
-        sec.auth().createUserWithEmailAndPassword(emailAdmin(rg), iS.value).then(function(cred){
+        sec.auth().createUserWithEmailAndPassword(mail, iS.value).then(function(cred){
           return cred.user.uid;
         }).catch(function(e){
           if(e && e.code==='auth/email-already-in-use'){
-            return sec.auth().signInWithEmailAndPassword(emailAdmin(rg), iS.value).then(function(cred2){ return cred2.user.uid; });
+            return sec.auth().signInWithEmailAndPassword(mail, iS.value).then(function(cred2){ return cred2.user.uid; });
           }
           throw e;
         }).then(function(uid){
           return sec.auth().signOut().then(function(){ return sec.delete(); }).then(function(){ return uid; });
         }).then(function(uid){
           ADMINS[rg]={nome:iNome.value.trim(),nivel:'adm',criadoPor:SESS.rg,uid:uid,ts:Date.now()};
+          if(emailReal) ADMINS[rg].email = emailReal;
           lsSet('admins',ADMINS);
           gravar('admins/'+rg, ADMINS[rg], 'novo administrador '+rg);
           auditar('admin_criar', rg, iNome.value.trim());
@@ -1596,6 +1831,39 @@ function vAdmins(main){
         }).catch(function(e){
           var msg = (e && (e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')) ? ('Já existe uma conta para o RG '+rg+' com outra senha. Use a senha correta dela, ou apague a conta em Firebase Console → Authentication.') : ('Falha ao criar administrador: '+(e.message||e.code));
           toast(msg,'erro'); sec.delete().catch(function(){});
+        });
+      }}
+    ]);
+  }
+  function definirEmailRecuperacao(rg){
+    var iE = el('input',{type:'email',placeholder:'seuemail@exemplo.com',value:(ADMINS[rg]||{}).email||''});
+    var iSenhaAtual = el('input',{type:'password',placeholder:'Senha atual'});
+    modal('E-mail de recuperação', el('div',{},[
+      el('p',{cls:'nota-info',text:'Usado só para o link de "Esqueci minha senha" na tela de login. O login continua sendo feito por RG.'}),
+      el('div',{cls:'form-gr'},[
+        el('div',{cls:'campo largo'},[el('label',{text:'E-mail'}),iE]),
+        el('div',{cls:'campo largo'},[el('label',{text:'Confirme sua senha atual'}),iSenhaAtual])
+      ])
+    ]),[
+      {rotulo:'Cancelar'},
+      {rotulo:'Salvar', cls:'btn-azul', acao:function(f){
+        var novo = iE.value.trim();
+        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(novo)){ toast('E-mail inválido.','erro'); return; }
+        if(!iSenhaAtual.value){ toast('Confirme sua senha atual.','erro'); return; }
+        if(!AUTH || !AUTH.currentUser){ toast('Sessão de autenticação expirada — saia e entre novamente.','erro'); return; }
+        var cred = firebase.auth.EmailAuthProvider.credential(AUTH.currentUser.email, iSenhaAtual.value);
+        AUTH.currentUser.reauthenticateWithCredential(cred).then(function(){
+          return AUTH.currentUser.updateEmail(novo);
+        }).then(function(){
+          ADMINS[rg]=Object.assign(ADMINS[rg]||{},{email:novo});
+          lsSet('admins',ADMINS);
+          gravar('admins/'+rg, ADMINS[rg], 'e-mail de recuperação de '+rg);
+          auditar('admin_email', rg, novo);
+          f(); toast('E-mail de recuperação salvo.','ok');
+        }).catch(function(e){
+          var c = e&&e.code;
+          var msg = c==='auth/wrong-password' ? 'Senha atual incorreta.' : ('Falha ao salvar e-mail: '+(e.message||c));
+          toast(msg,'erro');
         });
       }}
     ]);
