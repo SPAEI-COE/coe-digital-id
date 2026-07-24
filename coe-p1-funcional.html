@@ -258,7 +258,7 @@ function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
 /* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
    Não é segredo: o Firebase a expõe no cliente. Sem ela o Authentication não inicia.
    Pode ser injetada em runtime por localStorage: coep1_apikey */
-var FB_API_KEY = (function(){ try{ return JSON.parse(localStorage.getItem('coep1_apikey')||'""') || ''; }catch(e){ return ''; } })() || '';
+var FB_API_KEY = (function(){ try{ return JSON.parse(localStorage.getItem('coep1_apikey')||'""') || ''; }catch(e){ return ''; } })() || 'AIzaSyD7jmRxODElRmpvVl8N6C8LUrNzTc-Ke7Q';
 function origemValida(){ return location.protocol==='http:' || location.protocol==='https:'; }
 function authOK(){ return !!AUTH && !!FB_API_KEY && origemValida(); }
 function motivoAuth(){
