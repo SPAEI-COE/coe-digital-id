@@ -297,7 +297,7 @@ window.__SEED__ = [{"rg": "60919", "nome": "ALEX BENEVENUTO SANTOS", "posto": "C
 var SEED = window.__SEED__ || [];
 var OVR = {};            // overrides/extensões por RG (espelha coep1/mil)
 var FOTOS = {};          // dataURL por RG (espelha coep1/fotos)
-var CFG = { escala: 100, modoTV: 'grade', tempoPag: 12, ordem: null, pastas: {}, ocultas: [] };
+var CFG = { escala: 100, modoTV: 'grade', tempoPag: 12, ordem: null, pastas: {}, ocultas: [], catalogos: { especialidades: null, cursos: [] } };
 var ADMINS = null;       // carregado sob demanda (login/aba administradores)
 var AUDIT = [];
 var DOCS = {};           // meta de documentos por RG
@@ -329,8 +329,74 @@ function motivoAuth(){
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false };
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
-var ESPECIALIDADES = ['Blindados','Máquinas Pesadas','Demolição/EOD','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Cond. Viaturas Especiais','Telemática/TI','Instrutor'];
+var ESPECIALIDADES_PADRAO = ['Blindados','Máquinas Pesadas','Demolição/EOD','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Cond. Viaturas Especiais','Telemática/TI','Instrutor'];
 var TIPOS_SANGUINEOS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+/* ---- Catálogos dinâmicos (especialidades e cursos) ----
+   Guardados em CFG.catalogos, sincronizados no Firebase junto com o resto do CFG.
+   catalogos.especialidades===null na primeira vez -> usa ESPECIALIDADES_PADRAO como
+   semente (migração transparente do array fixo antigo). Depois disso vira lista própria. */
+function catEspecialidades(){
+  if(CFG.catalogos && Array.isArray(CFG.catalogos.especialidades)) return CFG.catalogos.especialidades;
+  return ESPECIALIDADES_PADRAO;
+}
+function catCursos(){
+  return (CFG.catalogos && Array.isArray(CFG.catalogos.cursos)) ? CFG.catalogos.cursos : [];
+}
+function normCat(s){ return (s||'').trim().replace(/\s+/g,' '); }
+function achaCat(lista, nome){
+  var alvo = normCat(nome).toLowerCase();
+  for(var i=0;i<lista.length;i++) if(lista[i].toLowerCase()===alvo) return i;
+  return -1;
+}
+function catAdicionar(tipo, nome, descr){
+  nome = normCat(nome); if(!nome) return false;
+  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  if(achaCat(atual, nome)>=0) return false;
+  atual.push(nome);
+  if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]};
+  CFG.catalogos = Object.assign({}, CFG.catalogos); CFG.catalogos[tipo]=atual;
+  gravar('cfg', CFG, descr || ('novo item em catálogo de '+tipo+': '+nome));
+  return true;
+}
+function catRenomear(tipo, de, para){
+  de=normCat(de); para=normCat(para); if(!para) return false;
+  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  var i = achaCat(atual, de); if(i<0) return false;
+  if(achaCat(atual, para)>=0 && para.toLowerCase()!==de.toLowerCase()){ toast('Já existe um item com esse nome.','erro'); return false; }
+  atual[i]=para;
+  CFG.catalogos = Object.assign({}, CFG.catalogos); CFG.catalogos[tipo]=atual;
+  gravar('cfg', CFG, 'renomear em catálogo de '+tipo+': '+de+' → '+para);
+  // Propaga o novo nome para todos os militares que usam o valor antigo
+  if(tipo==='especialidades'){
+    efetivo().forEach(function(m){
+      var esp = (m.ficha.func||{}).especialidades||[];
+      var j = esp.indexOf(de);
+      if(j>=0){ var novo = esp.slice(); novo[j]=para; var o=Object.assign({},m.ficha.func||{}); o.especialidades=novo; salvarFicha(m.rg,'func',o); }
+    });
+  } else {
+    efetivo().forEach(function(m){
+      var regs = fichaGet(m,'cursos'); if(!regs) return;
+      var mudou=false;
+      var novos = regs.map(function(r){ if(normCat(r.curso).toLowerCase()===de.toLowerCase()){ mudou=true; return Object.assign({},r,{curso:para}); } return r; });
+      if(mudou) salvarFicha(m.rg,'cursos',novos);
+    });
+  }
+  return true;
+}
+function catExcluir(tipo, nome){
+  nome=normCat(nome);
+  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  var i = achaCat(atual, nome); if(i<0) return false;
+  atual.splice(i,1);
+  CFG.catalogos = Object.assign({}, CFG.catalogos); CFG.catalogos[tipo]=atual;
+  gravar('cfg', CFG, 'exclusão em catálogo de '+tipo+': '+nome);
+  return true;
+}
+function catContagem(tipo, nome){
+  var tudo = efetivo();
+  if(tipo==='especialidades') return tudo.filter(function(m){ return ((m.ficha.func||{}).especialidades||[]).indexOf(nome)>=0; }).length;
+  return tudo.filter(function(m){ return (fichaGet(m,'cursos')||[]).some(function(r){ return normCat(r.curso).toLowerCase()===nome.toLowerCase(); }); }).length;
+}
 var NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ORDEM_PADRAO = ["CMT","SUBCMT","PROJETOS","P1","P2","P3","P4","P5","AJD","ALMOXARIFADO","NAOE","OBRAS","DEMOLIÇÃO","BLINDADOS","RUMB","FISCAL DE DIA","APOIO/DIVERSOS"];
 var RAIZ_RG = '82061';
@@ -724,7 +790,7 @@ function initFirebase(){
       for(var c in PEND){ if(c.indexOf('fotos/')===0) srv[c.slice(6)] = PEND[c]; }
       FOTOS = srv; agendarRepaint();
     });
-    DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:100,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[]}, v); espelhoLocal(); agendarRepaint(); } });
+    DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:100,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[],catalogos:{especialidades:null,cursos:[]}}, v); if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]}; espelhoLocal(); agendarRepaint(); } });
     DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; agendarRepaint(); });
   }catch(e){ DB=null; ONLINE=false; }
 }
@@ -1175,8 +1241,10 @@ function renderTV(app){
 var MENU = [
   {id:'dash', rot:'📊 Dashboard'},
   {id:'rel', rot:'📈 Relatórios'},
+  {id:'gerador', rot:'🔎 Gerador de Relatórios'},
   {id:'efetivo', rot:'🪖 Efetivo'},
   {id:'secoes', rot:'🗂 Seções & Pastas'},
+  {id:'categs', rot:'🏷️ Categorias'},
   {id:'tvcfg', rot:'📺 Configuração da TV'},
   {id:'links', rot:'🔗 QR & Links'},
   {id:'audit', rot:'📜 Auditoria'},
@@ -1207,7 +1275,7 @@ function renderAdmin(app){
   ]);
   app.appendChild(raiz);
   var main = $('#admMain');
-  ({dash:vDash,rel:vRelatorios,efetivo:vEfetivo,secoes:vSecoes,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
+  ({dash:vDash,rel:vRelatorios,gerador:vGerador,efetivo:vEfetivo,secoes:vSecoes,categs:vCategorias,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
 }
 
 /* ---- Diagnóstico ----
@@ -1355,6 +1423,177 @@ function vDash(main){
   main.appendChild(pn);
 }
 
+/* ============================================================
+   GERADOR DE RELATÓRIOS — mecanismo central único
+   Cada campo define como ler o valor de um militar (leitor) e de onde
+   vêm as opções (fixas ou catálogo dinâmico). Um novo campo só precisa
+   de uma entrada aqui — nenhum código de filtro/relatório é duplicado.
+   ============================================================ */
+function CAMPOS_RELATORIO(){
+  return [
+    {id:'sexo', rot:'Sexo', ops:function(){return ['M','F'];}, leitor:function(m){return (m.ficha.ident||{}).sexo||'';}},
+    {id:'situacao', rot:'Situação', ops:function(){var s={};efetivo().forEach(function(m){s[m.situacao||'ATIVO']=true;});return Object.keys(s).sort();}, leitor:function(m){return m.situacao||'ATIVO';}},
+    {id:'posto', rot:'Posto/Graduação', ops:function(){return POSTOS;}, leitor:function(m){return m.posto||'';}},
+    {id:'reparticao', rot:'Seção', ops:function(){return ordemSecoes().filter(function(s){return s[0]!=='@';});}, leitor:function(m){return m.reparticao||'';}},
+    {id:'adido', rot:'Adido', ops:function(){return ['Sim','Não'];}, leitor:function(m){return m.adido?'Sim':'Não';}},
+    {id:'tipoSanguineo', rot:'Tipo sanguíneo', ops:function(){return TIPOS_SANGUINEOS;}, leitor:function(m){return (m.ficha.saude||{}).tipoSanguineo||'';}},
+    {id:'habilitacao', rot:'Habilitação (categoria)', ops:function(){var c={};efetivo().forEach(function(m){var h=(m.habilitacao||{}).categoria;if(h)c[h]=true;});return Object.keys(c).sort();}, leitor:function(m){return (m.habilitacao||{}).categoria||'';}},
+    {id:'especialidade', rot:'Especialidade técnica', ops:catEspecialidades, leitor:function(m){return ((m.ficha.func||{}).especialidades||[]);}, multi:true},
+    {id:'curso', rot:'Curso', ops:catCursos, leitor:function(m){return (fichaGet(m,'cursos')||[]).map(function(r){return r.curso;});}, multi:true},
+    {id:'faixaEtaria', rot:'Faixa etária', ops:function(){return ['18–30','31–40','41–50','51–60','61+'];}, leitor:function(m){return faixaEtaria((m.ficha.ident||{}).nasc)||'';}}
+  ];
+}
+function CONDICOES(){
+  return [
+    {id:'igual', rot:'é igual a'},
+    {id:'contem', rot:'contém'},
+    {id:'naocontem', rot:'não contém'},
+    {id:'preenchido', rot:'está preenchido'},
+    {id:'naopreenchido', rot:'não está preenchido'}
+  ];
+}
+function avaliaFiltro(m, campoId, condId, valor){
+  var campo = CAMPOS_RELATORIO().filter(function(c){return c.id===campoId;})[0];
+  if(!campo) return true;
+  var v = campo.leitor(m);
+  var lista = campo.multi ? (v||[]) : [v];
+  var vv = (valor||'').toLowerCase();
+  switch(condId){
+    case 'igual': return lista.some(function(x){ return (x||'').toLowerCase()===vv; });
+    case 'contem': return lista.some(function(x){ return (x||'').toLowerCase().indexOf(vv)>=0; });
+    case 'naocontem': return !lista.some(function(x){ return (x||'').toLowerCase().indexOf(vv)>=0; });
+    case 'preenchido': return lista.some(function(x){ return !!x; });
+    case 'naopreenchido': return !lista.some(function(x){ return !!x; });
+  }
+  return true;
+}
+function aplicaFiltros(tudo, filtros, logica){
+  if(!filtros.length) return tudo;
+  return tudo.filter(function(m){
+    var resultados = filtros.map(function(f){ return avaliaFiltro(m, f.campo, f.cond, f.valor); });
+    return logica==='ou' ? resultados.some(Boolean) : resultados.every(Boolean);
+  });
+}
+function vGerador(main){
+  main.appendChild(el('div',{cls:'adm-h1'},['Gerador de Relatórios']));
+  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Combine campo, condição e valor para montar qualquer relatório nominal. Adicione mais de um filtro e escolha se todos precisam ser verdadeiros (E) ou apenas um (OU).'}));
+
+  var pn = el('div',{cls:'painel'});
+  var filtrosBox = el('div');
+  var filtros = []; // {campo, cond, valor}
+  var logicaSel = el('select',{},[el('option',{value:'e',text:'E (todos os filtros)'}),el('option',{value:'ou',text:'OU (qualquer filtro)'})]);
+  var resumo = el('p',{style:'font-size:.8rem;color:#4a5262;margin:.8em 0'});
+  var resultadoBox = el('div');
+  var listaAtual = [];
+
+  function linhaFiltro(idx){
+    var campos = CAMPOS_RELATORIO();
+    var selCampo = el('select'); campos.forEach(function(c){ selCampo.appendChild(el('option',{value:c.id,text:c.rot})); });
+    var selCond = el('select'); CONDICOES().forEach(function(c){ selCond.appendChild(el('option',{value:c.id,text:c.rot})); });
+    var valBox = el('span');
+    function pintaValor(){
+      valBox.innerHTML='';
+      var campo = campos.filter(function(c){return c.id===selCampo.value;})[0];
+      var precisaValor = selCond.value!=='preenchido' && selCond.value!=='naopreenchido';
+      if(!precisaValor){ filtros[idx].valor=''; return; }
+      var ops = campo.ops();
+      var inp;
+      if(ops.length){
+        var listId='dl_ger_'+idx+'_'+Math.random().toString(36).slice(2);
+        var dl = el('datalist',{id:listId}); ops.forEach(function(o){ dl.appendChild(el('option',{value:o})); });
+        inp = el('input',{type:'text',list:listId,placeholder:'Valor…'});
+        valBox.appendChild(inp); valBox.appendChild(dl);
+      } else {
+        inp = el('input',{type:'text',placeholder:'Valor…'});
+        valBox.appendChild(inp);
+      }
+      inp.addEventListener('input', function(){ filtros[idx].valor=inp.value; });
+    }
+    selCampo.addEventListener('change', function(){ filtros[idx].campo=selCampo.value; pintaValor(); });
+    selCond.addEventListener('change', function(){ filtros[idx].cond=selCond.value; pintaValor(); });
+    filtros[idx] = {campo:campos[0].id, cond:'igual', valor:''};
+    pintaValor();
+    var linha = el('div',{style:'display:flex;gap:.5em;align-items:center;margin-bottom:.5em;flex-wrap:wrap'},[
+      selCampo, selCond, valBox,
+      el('button',{cls:'btn btn-erro btn-min',onclick:function(){ var i=filtros.indexOf(filtros[idx]); filtros.splice(i,1); linha.remove(); }},['✕'])
+    ]);
+    filtrosBox.appendChild(linha);
+  }
+
+  pn.appendChild(el('h3',{text:'Filtros'}));
+  pn.appendChild(filtrosBox);
+  linhaFiltro(0);
+  pn.appendChild(el('div',{style:'display:flex;gap:.6em;align-items:center;margin:.6em 0'},[
+    el('button',{cls:'btn btn-borda btn-min',onclick:function(){ linhaFiltro(filtros.length); }},['+ Adicionar filtro']),
+    el('span',{text:'Combinar com:'}), logicaSel
+  ]));
+  var btVer = el('button',{cls:'btn btn-azul',onclick:function(){
+    listaAtual = aplicaFiltros(efetivo(), filtros.filter(function(f){return f.cond==='preenchido'||f.cond==='naopreenchido'||normCat(f.valor);}), logicaSel.value);
+    resumo.textContent = listaAtual.length+' militar(es) encontrado(s).';
+    resultadoBox.innerHTML='';
+    if(listaAtual.length){
+      var grade = el('div',{cls:'grade-adm'});
+      listaAtual.forEach(function(m){ grade.appendChild(cardPM(m,{click:abrirFicha})); });
+      resultadoBox.appendChild(grade);
+    }
+  }},['🔎 Visualizar resultados']);
+  var btPdf = el('button',{cls:'btn btn-ouro',onclick:function(){
+    if(!listaAtual.length){ toast('Visualize os resultados antes de gerar o PDF.','erro'); return; }
+    gerarPDFRelatorio('Relatório personalizado', listaAtual);
+  }},['📄 Gerar PDF']);
+  pn.appendChild(el('div',{style:'display:flex;gap:.6em;margin:.8em 0'},[btVer, btPdf]));
+  pn.appendChild(resumo);
+  pn.appendChild(resultadoBox);
+  main.appendChild(pn);
+}
+
+/* ---- Categorias (especialidades e cursos geríveis pelo ADM) ---- */
+function vCategorias(main){
+  main.appendChild(el('div',{cls:'adm-h1'},['Categorias']));
+  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Especialidades técnicas e cursos usados nas fichas e nos relatórios. Renomear aqui atualiza automaticamente todos os militares que possuem o item; excluir remove só o item do catálogo (com confirmação se estiver em uso).'}));
+
+  function painelCatalogo(titulo, tipo){
+    var pn = el('div',{cls:'painel'});
+    pn.appendChild(el('h3',{text:titulo}));
+    var lista = tipo==='especialidades' ? catEspecialidades() : catCursos();
+    var box = el('div',{cls:'lista-reg'});
+    function repinta(){
+      box.innerHTML='';
+      var atual = tipo==='especialidades' ? catEspecialidades() : catCursos();
+      if(!atual.length){ box.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262',text:'Nenhum item cadastrado ainda.'})); }
+      atual.forEach(function(nome){
+        var n = catContagem(tipo, nome);
+        var linha = el('div',{cls:'reg',style:'display:flex;align-items:center;gap:.6em'});
+        linha.appendChild(el('span',{style:'flex:1',text:nome}));
+        linha.appendChild(el('span',{cls:'mono',style:'font-size:.75rem;color:#8a93a3',text:n+' militar(es)'}));
+        linha.appendChild(el('button',{cls:'btn btn-borda btn-min',onclick:function(){
+          var novo = prompt('Renomear "'+nome+'" para:', nome);
+          if(novo==null) return;
+          if(catRenomear(tipo, nome, novo)) { toast('Renomeado e propagado para o efetivo.','ok'); repinta(); }
+        }},['✎ Renomear']));
+        linha.appendChild(el('button',{cls:'btn btn-erro btn-min',onclick:function(){
+          var aviso = n>0 ? ('Este item está em uso por '+n+' militar(es). Excluí-lo do catálogo NÃO remove o dado já salvo neles, apenas some da lista de opções e dos relatórios agrupados. Continuar?') : ('Excluir "'+nome+'" do catálogo?');
+          confirmar(aviso, function(){ catExcluir(tipo, nome); toast('Excluído do catálogo.','ok'); repinta(); });
+        }},['✕']));
+        box.appendChild(linha);
+      });
+    }
+    repinta();
+    pn.appendChild(box);
+    var novoInp = el('input',{placeholder:'Nome do novo item…',style:'flex:1'});
+    var novoBtn = el('button',{cls:'btn btn-ouro btn-min',onclick:function(){
+      var nome = normCat(novoInp.value); if(!nome) return;
+      if(catAdicionar(tipo, nome)){ novoInp.value=''; repinta(); toast('Adicionado ao catálogo.','ok'); }
+      else toast('Esse item já existe no catálogo.','erro');
+    }},['+ Adicionar']);
+    pn.appendChild(el('div',{style:'display:flex;gap:.5em;margin-top:.7em'},[novoInp, novoBtn]));
+    main.appendChild(pn);
+  }
+
+  painelCatalogo('Especialidades técnicas', 'especialidades');
+  painelCatalogo('Cursos', 'cursos');
+}
+
 /* ---- Relatórios ---- */
 function vRelatorios(main){
   var tudo = efetivo();
@@ -1446,7 +1685,7 @@ function vRelatorios(main){
     return grupo('Categoria '+c, function(m){ return (m.habilitacao||{}).categoria===c; });
   }).concat([grupo('Sem habilitação cadastrada', function(m){ return !(m.habilitacao||{}).categoria; })]));
 
-  painelBarras('Especialidades técnicas', ESPECIALIDADES.map(function(e){
+  painelBarras('Especialidades técnicas', catEspecialidades().map(function(e){
     return grupo(e, function(m){ return ((m.ficha.func||{}).especialidades||[]).indexOf(e)>=0; });
   }));
 
@@ -1454,6 +1693,12 @@ function vRelatorios(main){
     var sits={}; tudo.forEach(function(m){ sits[m.situacao||'ATIVO']=true; });
     return Object.keys(sits).sort().map(function(s){ return grupo(s, function(m){ return (m.situacao||'ATIVO')===s; }); });
   })());
+
+  if(catCursos().length){
+    painelBarras('Cursos', catCursos().map(function(c){
+      return grupo(c, function(m){ return (fichaGet(m,'cursos')||[]).some(function(r){ return normCat(r.curso).toLowerCase()===c.toLowerCase(); }); });
+    }));
+  }
 }
 function definirDestaque(chaveMes){
   var busca = el('input',{placeholder:'Buscar por nome ou RG…'});
@@ -1857,6 +2102,12 @@ function formCampos(defs, valores, extraCls){
     var v = valores && valores[d.id]!=null ? valores[d.id] : (d.def!=null?d.def:'');
     var inp;
     if(d.tipo==='select'){ inp = el('select'); (d.ops||[]).forEach(function(o){ inp.appendChild(el('option',{value:o,text:o,selected:String(v)===o?'':null})); }); }
+    else if(d.tipo==='combo'){
+      var listId = 'dl_'+d.id+'_'+Math.random().toString(36).slice(2);
+      var dl = el('datalist',{id:listId}); (d.ops||[]).forEach(function(o){ dl.appendChild(el('option',{value:o})); });
+      inp = el('input',{type:'text',value:v,list:listId});
+      inp.no = el('span',{},[inp, dl]); // agrupa input+datalist para o wrap.appendChild abaixo
+    }
     else if(d.tipo==='textarea'){ inp = el('textarea',{rows:'2'}); inp.value=v; }
     else if(d.tipo==='check'){ inp = el('select'); ['Não','Sim'].forEach(function(o){ inp.appendChild(el('option',{value:o,text:o,selected:(v===true||v==='Sim')===(o==='Sim')?'':null})); }); }
     else if(d.tipo==='date'){ inp = campoData(v); }
@@ -1981,7 +2232,7 @@ function abaFunc(area, m, md){
   var espBox = el('div',{cls:'tags-sel'});
   function pintaEsp(){
     espBox.innerHTML='';
-    ESPECIALIDADES.forEach(function(nome){
+    catEspecialidades().forEach(function(nome){
       var ativo = espSel.indexOf(nome)>=0;
       espBox.appendChild(el('button',{type:'button',cls:'tagbtn'+(ativo?' on':''),onclick:function(){
         var i=espSel.indexOf(nome); if(i>=0) espSel.splice(i,1); else espSel.push(nome); pintaEsp();
@@ -1990,6 +2241,16 @@ function abaFunc(area, m, md){
   }
   pintaEsp();
   area.appendChild(espBox);
+  var novaEspBox = el('div',{style:'display:flex;gap:.4em;margin-top:.5em'});
+  var novaEspInp = el('input',{placeholder:'+ Nova especialidade…',style:'flex:1'});
+  var novaEspBtn = el('button',{type:'button',cls:'btn btn-borda btn-min',onclick:function(){
+    var nome = normCat(novaEspInp.value); if(!nome) return;
+    if(achaCat(catEspecialidades(), nome)<0) catAdicionar('especialidades', nome, 'especialidade criada via ficha de '+m.rg);
+    if(espSel.indexOf(nome)<0) espSel.push(nome);
+    novaEspInp.value=''; pintaEsp();
+  }},['+ Adicionar']);
+  novaEspBox.appendChild(novaEspInp); novaEspBox.appendChild(novaEspBtn);
+  area.appendChild(novaEspBox);
   area.appendChild(botaoSalvar(function(){
     if(!f.valido()) return false;
     var o=f.ler(); o.especialidades=espSel;
@@ -2050,13 +2311,14 @@ function abaCursos(area, m, md){
   var atuais = (m.cursos||[]).map(function(c){ return {curso:c.nome||c.curso||'',validade:c.validade||'',inst:c.inst||'',ch:c.ch||'',periodo:c.periodo||'',obs:c.obs||''}; });
   var extras = fichaGet(m,'cursos');
   listaRegistros(area, extras||atuais, [
-    {id:'curso',rot:'Curso',largo:true},
+    {id:'curso',rot:'Curso',largo:true,tipo:'combo',ops:catCursos()},
     {id:'inst',rot:'Instituição'},
     {id:'periodo',rot:'Período'},
     {id:'ch',rot:'Carga horária'},
     {id:'validade',rot:'Validade',tipo:'date'},
     {id:'obs',rot:'Observações',largo:true}
   ], {}, function(regs){
+    regs.forEach(function(r){ if(normCat(r.curso) && achaCat(catCursos(), r.curso)<0) catAdicionar('cursos', r.curso, 'curso criado via ficha de '+m.rg); });
     return salvarConjunto(m.rg, {cursos:regs.map(function(r){ return {nome:r.curso,validade:r.validade||''}; })},
                           'cursos', regs, 'cursos de '+m.rg);
   }, md);
