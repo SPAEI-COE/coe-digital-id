@@ -1,0 +1,26 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "coep1": {
+      ".read": "auth != null",
+      ".write": "root.child('coep1/admins_uid').child(auth.uid).exists()",
+
+      "admins_uid": {
+        ".read": "auth != null",
+        "$uid": {
+          ".validate": "newData.hasChildren(['rg'])"
+        }
+      },
+
+      "_health": {
+        ".read": "auth != null",
+        "$registro": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['ts'])"
+        }
+      }
+    }
+  }
+}
