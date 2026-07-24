@@ -588,14 +588,30 @@ function renderLogin(app){
         if(s2.value!==senha){ toast('As senhas não conferem.','erro'); return; }
         if(senha.length<6){ toast('Use ao menos 6 caracteres.','erro'); return; }
         if(!authOK()){ toast(motivoAuth(),'erro'); return; }
-        AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
-          ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:cred.user.uid, ts:Date.now()};
+        function assumirRaiz(uid){
+          ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:uid, ts:Date.now()};
           lsSet('admins',ADMINS);
           gravar('admins/'+rg, ADMINS[rg], 'cadastro do administrador-raiz');
           SESS={rg:rg,nome:ADMINS[rg].nome,nivel:'raiz',exp:Date.now()+12*3600e3};
           lsSet('sess',SESS); auditar('primeiro_acesso','','admin-raiz criado');
           f(); irPara('admin');
-        }).catch(function(e){ toast('Falha ao criar administrador-raiz: '+(e.message||e.code),'erro'); });
+        }
+        AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
+          assumirRaiz(cred.user.uid);
+        }).catch(function(e){
+          /* Conta de Authentication já existe (ex.: nó admins/ do banco foi apagado, mas a
+             conta de auth permaneceu). Em vez de travar, tenta entrar com a senha digitada
+             e recupera automaticamente o registro do admin-raiz no banco. */
+          if(e && e.code==='auth/email-already-in-use'){
+            AUTH.signInWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred2){
+              assumirRaiz(cred2.user.uid);
+            }).catch(function(){
+              toast('Já existe uma conta para o RG '+rg+', mas essa não é a senha dela. Use a senha já cadastrada, ou apague a conta em Firebase Console → Authentication → Users para recomeçar do zero.','erro');
+            });
+            return;
+          }
+          toast('Falha ao criar administrador-raiz: '+(e.message||e.code),'erro');
+        });
       }}
     ]);
   }
@@ -1553,7 +1569,13 @@ function vAdmins(main){
         // app secundário: cria a conta sem derrubar a sessão de quem está logado agora
         var sec = firebase.initializeApp(firebase.app().options, 'sec_'+Date.now());
         sec.auth().createUserWithEmailAndPassword(emailAdmin(rg), iS.value).then(function(cred){
-          var uid = cred.user.uid;
+          return cred.user.uid;
+        }).catch(function(e){
+          if(e && e.code==='auth/email-already-in-use'){
+            return sec.auth().signInWithEmailAndPassword(emailAdmin(rg), iS.value).then(function(cred2){ return cred2.user.uid; });
+          }
+          throw e;
+        }).then(function(uid){
           return sec.auth().signOut().then(function(){ return sec.delete(); }).then(function(){ return uid; });
         }).then(function(uid){
           ADMINS[rg]={nome:iNome.value.trim(),nivel:'adm',criadoPor:SESS.rg,uid:uid,ts:Date.now()};
@@ -1561,7 +1583,10 @@ function vAdmins(main){
           gravar('admins/'+rg, ADMINS[rg], 'novo administrador '+rg);
           auditar('admin_criar', rg, iNome.value.trim());
           f(); renderRota();
-        }).catch(function(e){ toast('Falha ao criar administrador: '+(e.message||e.code),'erro'); sec.delete().catch(function(){}); });
+        }).catch(function(e){
+          var msg = (e && (e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')) ? ('Já existe uma conta para o RG '+rg+' com outra senha. Use a senha correta dela, ou apague a conta em Firebase Console → Authentication.') : ('Falha ao criar administrador: '+(e.message||e.code));
+          toast(msg,'erro'); sec.delete().catch(function(){});
+        });
       }}
     ]);
   }
