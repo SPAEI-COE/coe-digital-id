@@ -5,7 +5,7 @@
 
     "coep1": {
       ".read": "auth != null",
-      ".write": "root.child('coep1/admins_uid').child(auth.uid).exists()",
+      ".write": "root.child('coep1/admins_uid').child(auth.uid).exists() || !root.child('coep1/admins_uid').exists()",
 
       "admins_uid": {
         ".read": "auth != null",
