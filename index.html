@@ -316,7 +316,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v7 · 2026-07-28 · TV rolagem manual';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v8 · 2026-07-28 · busca estável + aviso de pendência autolimpante';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 var ULTIMO_ERRO = null;  // último erro real devolvido pelo banco (alimenta a aba Diagnóstico)
 var ANON = false;        // true quando a TV/visão pública entrou como usuário anônimo
 var FILA_BOOT = null;    // gravações pendentes recuperadas do aparelho (preenchida no boot)
@@ -724,7 +724,9 @@ function gravar(caminho, valor, descr){
     delete PEND[caminho];
     FILA = FILA.filter(function(f){ return f.caminho!==caminho; });
     espelhoLocal();
-    syncPend = syncPend.filter(function(w){ return w.caminho!==caminho; }); desenhaAviso();
+    syncPend = syncPend.filter(function(w){ return w.caminho!==caminho; });
+    if(!FILA.length) syncPend = syncPend.filter(function(w){ return w.caminho!=='__fila__'; });   // fila zerada: o aviso de boot já não tem razão de existir
+    desenhaAviso();
     return true;
   }).catch(function(e){
     if(SEQW[caminho]!==seq) return false;
@@ -1297,7 +1299,15 @@ var MENU = [
 function renderAdmin(app){
   pararTV(); lsDel('tvMode');
   app.innerHTML='';
-  var busca = el('input',{placeholder:'Buscar por nome, RG, função…',value:VIEW.filtro.q,oninput:debounce(function(e){ VIEW.filtro.q=e.target.value; VIEW.abaAdm='efetivo'; renderRota(); },250)});
+  var busca = el('input',{placeholder:'Buscar por nome, RG, função…',value:VIEW.filtro.q,oninput:debounce(function(e){
+    VIEW.filtro.q=e.target.value; VIEW.abaAdm='efetivo';
+    var pos = e.target.selectionStart;
+    renderRota();
+    /* renderRota recria o painel inteiro (campo de busca incluso); sem isto, o
+       foco morre a cada letra e o usuário só consegue digitar 1 caractere por vez */
+    var novo = document.querySelector('.adm-busca input');
+    if(novo){ novo.focus(); try{ novo.setSelectionRange(pos,pos); }catch(_){ } }
+  },250)});
   var raiz = el('div',{cls:'adm'},[
     MODO_LEGADO?el('div',{style:'grid-column:1/-1;background:#7a2b00;color:#ffd9b0;padding:.5em 1em;font-size:.78rem;font-weight:600',text:'⚠ Sessão aberta pelo esquema antigo de senha (hash no banco). Motivo: '+MODO_LEGADO}):null,
     el('header',{cls:'adm-topo'},[
@@ -2921,7 +2931,7 @@ function boot(){
   var cfgLS = lsGet('cfg'); if(cfgLS) CFG = Object.assign(CFG, cfgLS);
   var filaLS = lsGet('fila'); if(filaLS && filaLS.length){
     FILA = filaLS;
-    persistWarn(FILA.length+' alteração(ões) ainda não chegaram ao banco (ficaram deste aparelho na última sessão).', escoaFila);
+    persistWarn(FILA.length+' alteração(ões) ainda não chegaram ao banco (ficaram deste aparelho na última sessão).', escoaFila, '__fila__');
   }
   initFirebase();
   setTimeout(function(){ if(DB && FILA.length) escoaFila(); }, 2500);
