@@ -3,6 +3,11 @@
     ".read": false,
     ".write": false,
 
+    "spaei":         { ".read": true, ".write": true },
+    "spaei-digital": { ".read": true, ".write": true },
+    "sei-digital":   { ".read": true, ".write": true },
+    "p1digital":     { ".read": true, ".write": true },
+
     "coep1": {
       ".read": "auth != null",
       ".write": "root.child('coep1/admins_uid').child(auth.uid).exists() || auth.token.email == 'rg82061@coep1.pmerj.local'",
