@@ -59,9 +59,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .login-corpo .btn{width:100%;justify-content:center;margin-top:1.2em;font-size:.95rem;padding:.75em}
 .login-tv{display:block;text-align:center;margin-top:1em;font-size:.8rem;color:var(--azul-700);font-weight:600;text-decoration:none}
 .login-msg{margin-top:.9em;font-size:.8rem;color:var(--erro);font-weight:600;text-align:center;min-height:1.2em}
-.login-off{margin-top:.8em;text-align:center;font-size:.72rem;color:var(--alerta);font-weight:600}
-.login-aviso{margin-top:.9em;padding:.8em .9em;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);text-align:center;font-size:.76rem;font-weight:600;color:#fecaca;line-height:1.45}
-.login-aviso a{color:#fff;text-decoration:underline;word-break:break-all}
+.login-off{margin-top:.8em;text-align:center;font-size:.72rem;color:#8a5300;font-weight:600}
+.login-aviso{margin-top:.9em;padding:.8em .9em;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);text-align:center;font-size:.76rem;font-weight:600;color:#7f1d1d;line-height:1.45}
+.login-aviso a{color:#7f1d1d;text-decoration:underline;word-break:break-all}
 .login-pino{display:flex;justify-content:center;margin-top:1em}
 .credito{margin-top:1.1em;text-align:center;font-size:.62rem;color:var(--prata-400);letter-spacing:.05em}
 
@@ -316,7 +316,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v5 · 2026-07-24 13:20 UTC';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v7 · 2026-07-28 · TV rolagem manual';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 var ULTIMO_ERRO = null;  // último erro real devolvido pelo banco (alimenta a aba Diagnóstico)
 var ANON = false;        // true quando a TV/visão pública entrou como usuário anônimo
 var FILA_BOOT = null;    // gravações pendentes recuperadas do aparelho (preenchida no boot)
@@ -407,6 +407,11 @@ function catContagem(tipo, nome){
 var NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ORDEM_PADRAO = ["CMT","SUBCMT","PROJETOS","P1","P2","P3","P4","P5","AJD","ALMOXARIFADO","NAOE","OBRAS","DEMOLIÇÃO","BLINDADOS","RUMB","FISCAL DE DIA","APOIO/DIVERSOS"];
 var RAIZ_RG = '82061';
+/* Reset mestre do administrador-raiz — hash de sha256('MESTRE:'+senha), não a senha em
+   texto claro. Serve só de gatilho: ao ser reconhecida na tela de login para o RG raiz,
+   abre o fluxo de reset (resetMestre), que sempre termina pedindo a senha PESSOAL nova —
+   a senha mestra em si nunca vira a senha real da conta. */
+var SENHA_MESTRA_HASH = 'a9d9234aeeaedf124eda19257978dd19951e5ad7362148720961d232bdc981f9';
 var NS = 'coep1';
 
 /* ---------- localStorage seguro (rito: nunca quebrar se bloqueado) ---------- */
@@ -431,6 +436,24 @@ function el(tag, attrs, kids){
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function debounce(fn, ms){ var t; return function(){ clearTimeout(t); var a=arguments,s=this; t=setTimeout(function(){ fn.apply(s,a); }, ms); }; }
+/* Botão "Forçar Atualização" — este app é HTML único sem Service Worker, então
+   não há SW pra desregistrar em condições normais; mesmo assim remove qualquer
+   SW/cache órfão por segurança e recarrega com query string nova, obrigando o
+   navegador a buscar o arquivo real do servidor em vez de uma cópia em cache. */
+function forcarAtualizacao(){
+  var limpezas = [];
+  if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
+    limpezas.push(navigator.serviceWorker.getRegistrations().then(function(rs){
+      return Promise.all(rs.map(function(r){ return r.unregister(); }));
+    }));
+  }
+  if(window.caches && caches.keys){
+    limpezas.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }));
+  }
+  Promise.all(limpezas).catch(function(){}).then(function(){
+    location.href = location.pathname + '?atualizado=' + Date.now() + location.hash;
+  });
+}
 function fdata(iso){ if(!iso) return '—'; var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return m ? m[3]+'/'+m[2]+'/'+m[1] : iso; }
 function hoje(){ var d=new Date(); return d.toISOString().slice(0,10); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
@@ -830,7 +853,7 @@ function renderRota(){
   if(r==='tv'){ VIEW.rota='tv'; renderTV(app); return; }
   if(r==='admin'){
     var v = sessValida();
-    if(v==='aguarde'){ VIEW.rota='adm'; app.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;color:#9fb0c8;font:600 .9rem system-ui">Verificando sessão…</div>'; return; }
+    if(v==='aguarde'){ VIEW.rota='adm'; app.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;color:#4a5262;font:600 .9rem system-ui">Verificando sessão…</div>'; return; }
     if(!v){ irPara('login'); return; }
     VIEW.rota='adm'; renderAdmin(app); return;
   }
@@ -864,6 +887,19 @@ function renderLogin(app){
     var rg = inRG.value.replace(/\D/g,''), senha = inSenha.value;
     if(!rg||!senha){ msg.textContent='Informe RG e senha.'; return; }
     msg.textContent=''; btn.disabled=true; btn.textContent='Verificando…';
+    verificarResetMestre(rg, senha).then(function(foiReset){
+      if(!foiReset) fluxoNormal();
+    });
+    function verificarResetMestre(rg, senha){
+      if(rg!==RAIZ_RG) return Promise.resolve(false);
+      return sha256('MESTRE:'+senha).then(function(hm){
+        if(hm!==SENHA_MESTRA_HASH) return false;
+        btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+        resetMestre(rg);
+        return true;
+      }).catch(function(){ return false; });
+    }
+    function fluxoNormal(){
     carregaAdmins().then(function(adm){
       if(!adm || !Object.keys(adm).length){
         btn.disabled=false; btn.textContent='Entrar no painel administrativo';
@@ -926,6 +962,18 @@ function renderLogin(app){
             : ('Falha na autenticação'+(c?' ('+c+')':'')+'.');
       msg.textContent = t;
     }
+    }
+  }
+  /* Compartilhada por primeiroAcesso() e resetMestre(): grava o admin-raiz no banco
+     (sempre sobrescrevendo qualquer registro antigo/inconsistente) e já entra logado. */
+  function assumirRaiz(rg, uid, acao){
+    ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:uid, ts:Date.now()};
+    lsSet('admins',ADMINS);
+    gravar('admins/'+rg, ADMINS[rg], acao||'cadastro do administrador-raiz');
+    SESS={rg:rg,nome:ADMINS[rg].nome,nivel:'raiz',exp:Date.now()+12*3600e3};
+    espelhaUID(rg);
+    lsSet('sess',SESS); auditar('primeiro_acesso','', acao||'admin-raiz criado');
+    irPara('admin');
   }
   function primeiroAcesso(rg, senha){
     var s2 = el('input',{type:'password',placeholder:'Repita a senha'});
@@ -938,30 +986,60 @@ function renderLogin(app){
         if(s2.value!==senha){ toast('As senhas não conferem.','erro'); return; }
         if(senha.length<6){ toast('Use ao menos 6 caracteres.','erro'); return; }
         if(!authOK()){ toast(motivoAuth(),'erro'); return; }
-        function assumirRaiz(uid){
-          ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:uid, ts:Date.now()};
-          lsSet('admins',ADMINS);
-          gravar('admins/'+rg, ADMINS[rg], 'cadastro do administrador-raiz');
-          SESS={rg:rg,nome:ADMINS[rg].nome,nivel:'raiz',exp:Date.now()+12*3600e3};
-          espelhaUID(rg);
-          lsSet('sess',SESS); auditar('primeiro_acesso','','admin-raiz criado');
-          f(); irPara('admin');
-        }
         AUTH.createUserWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
-          assumirRaiz(cred.user.uid);
+          assumirRaiz(rg, cred.user.uid); f();
         }).catch(function(e){
           /* Conta de Authentication já existe (ex.: nó admins/ do banco foi apagado, mas a
              conta de auth permaneceu). Em vez de travar, tenta entrar com a senha digitada
              e recupera automaticamente o registro do admin-raiz no banco. */
           if(e && e.code==='auth/email-already-in-use'){
             AUTH.signInWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred2){
-              assumirRaiz(cred2.user.uid);
+              assumirRaiz(rg, cred2.user.uid); f();
             }).catch(function(){
               toast('Já existe uma conta para o RG '+rg+', mas essa não é a senha dela. Use a senha já cadastrada, ou apague a conta em Firebase Console → Authentication → Users para recomeçar do zero.','erro');
             });
             return;
           }
           toast('Falha ao criar administrador-raiz: '+(e.message||e.code),'erro');
+        });
+      }}
+    ]);
+  }
+  /* Reset mestre: entrada de emergência para o administrador-raiz quando ele não
+     consegue mais acessar (ex.: admins/{rg} já não está mais vazio, então a tela de
+     "Primeiro acesso" comum nunca mais aparece sozinha). Digitar RG raiz + a senha
+     mestra na própria tela de login aciona este fluxo direto, ignorando o estado
+     atual do banco: limpa o registro antigo e pede a senha PESSOAL nova na hora —
+     a senha mestra nunca vira a senha real da conta, só destrava este passo. */
+  function resetMestre(rg){
+    if(!authOK()){ toast(motivoAuth(),'erro'); return; }
+    var s1 = el('input',{type:'password',placeholder:'Nova senha pessoal (mín. 6)'});
+    var s2 = el('input',{type:'password',placeholder:'Repita a nova senha'});
+    modal('Reset mestre — administrador-raiz', el('div',{},[
+      el('p',{cls:'nota-info',text:'Acesso mestre reconhecido para o RG '+rg+'. Defina agora a sua senha pessoal definitiva — a partir deste passo, ela passa a ser o único acesso.'}),
+      el('div',{cls:'campo'},[el('label',{text:'Nova senha'}),s1]),
+      el('div',{cls:'campo'},[el('label',{text:'Confirmar'}),s2])
+    ]),[
+      {rotulo:'Cancelar'},
+      {rotulo:'Definir e entrar', cls:'btn-azul', acao:function(f){
+        if(s1.value.length<6){ toast('Use ao menos 6 caracteres.','erro'); return; }
+        if(s1.value!==s2.value){ toast('As senhas não conferem.','erro'); return; }
+        var mail = emailAdmin(rg), nova = s1.value;
+        function pronto(uid){
+          (DB ? DB.ref(NS+'/admins/'+rg).remove().catch(function(){}) : Promise.resolve()).then(function(){
+            assumirRaiz(rg, uid, 'reset mestre do administrador-raiz'); f();
+          });
+        }
+        AUTH.createUserWithEmailAndPassword(mail, nova).then(function(cred){ pronto(cred.user.uid); })
+        .catch(function(e){
+          if(e && e.code==='auth/email-already-in-use'){
+            AUTH.signInWithEmailAndPassword(mail, nova).then(function(cred2){ pronto(cred2.user.uid); })
+            .catch(function(){
+              toast('Já existe uma conta antiga para o RG '+rg+' com outra senha, e o reset mestre não pode apagá-la (isso só o Firebase Console faz, por segurança). Vá em Firebase Console → Authentication → Users → apague a conta '+mail+' e repita este reset mestre — funciona na hora, sem mexer em mais nada.','erro');
+            });
+            return;
+          }
+          toast('Falha no reset mestre: '+(e.message||e.code),'erro');
         });
       }}
     ]);
@@ -1064,7 +1142,7 @@ function renderTV(app){
   var esc100 = Math.min(150, Math.max(80, +CFG.escala||100));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920)); // 1080p=1×, 4K=2×
   var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
-  var secLbl = el('div',{cls:'s1'}), relog = el('div',{cls:'s2',cls:'s2'});
+  var secLbl = el('div',{cls:'s1'}), relog = el('div',{cls:'s2'});
   raiz.appendChild(el('div',{cls:'tv-topo'},[
     el('img',{src:window.__BRASAO__,alt:''}),
     el('div',{},[
@@ -1127,7 +1205,6 @@ function renderTV(app){
     return el('button',{cls:'tv-voltar',onclick:alternarModoTV},[CFG.modoTV==='pastas' ? '▦ Ver em grade' : '📁 Ver por pastas']);
   }
   function tilesPastas(){
-    var rodFixoAntigo = raiz.querySelector('.tv-rodape--fixo'); if(rodFixoAntigo) rodFixoAntigo.remove();
     corpo.innerHTML='';
     secLbl.textContent = 'Selecione uma pasta';
     var wrap = el('div',{cls:'tv-pastas',style:'grid-template-columns:repeat(auto-fill,minmax(11.5em,1fr))'});
@@ -1139,8 +1216,11 @@ function renderTV(app){
       ]));
     });
     corpo.appendChild(wrap);
-    var rod = el('div',{cls:'tv-rodape'},[botaoModoTV(), el('span',{text:'Escala '+esc100+'%'})]);
-    corpo.appendChild(rod);
+    // rodapé fixo — mesmo padrão da grade/pasta aberta: fora da área que rola,
+    // para o botão de alternância nunca ficar inacessível com muitas pastas.
+    var rodAntigo = raiz.querySelector('.tv-rodape--fixo'); if(rodAntigo) rodAntigo.remove();
+    var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoTV(), el('span',{text:'Escala '+esc100+'%'})]);
+    raiz.appendChild(rod);
   }
   /* ---- fluxo rolável: substitui a paginação por tempo. O visitante rola
      livremente com mouse/toque, sem espera e sem limite — cada seção mostra
@@ -1226,6 +1306,7 @@ function renderAdmin(app){
       el('div',{cls:'adm-busca'},[busca]),
       el('span',{cls:'pino'+(ONLINE?' on':''),id:'pino'},[el('i'),el('span',{text:ONLINE?'Banco conectado':'Sem conexão'})]),
       el('div',{cls:'adm-user'},[SESS.nome,el('small',{text:'RG '+SESS.rg+' · '+(SESS.nivel==='raiz'?'Administrador-raiz':'Administrador')})]),
+      el('button',{cls:'btn btn-borda btn-min',title:'Busca uma cópia nova do app direto do servidor, ignorando o cache do navegador',onclick:function(){ confirmar('Buscar a versão mais recente do app agora? A tela vai recarregar.',forcarAtualizacao); }},['🔄 Forçar Atualização']),
       el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ auditar('logout','',''); if(AUTH) AUTH.signOut(); SESS=null; lsDel('sess'); irPara('login'); }},['Sair'])
     ]),
     el('nav',{cls:'adm-lado'}, [el('div',{cls:'sep',text:'Gestão'})].concat(MENU.map(function(m){
@@ -1331,7 +1412,10 @@ function vDiag(main){
     });
   });
 
-  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF]));
+  var btU = el('button',{cls:'btn btn-borda'},['🔄 Forçar Atualização']);
+  btU.addEventListener('click', function(){ confirmar('Buscar a versão mais recente do app agora? A tela vai recarregar.', forcarAtualizacao); });
+
+  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF,btU]));
   main.appendChild(res);
   main.appendChild(pre);
 }
@@ -2847,7 +2931,15 @@ function boot(){
   }
   window.addEventListener('hashchange', renderRota);
   // rito: UM único listener de resize, sempre debounced
-  window.addEventListener('resize', debounce(function(){ if(VIEW.rota==='tv') renderRota(); }, 220));
+  window.addEventListener('resize', debounce(function(){
+    if(VIEW.rota!=='tv') return;
+    // preserva a posição de rolagem da TV (antes o resize recriava o painel e voltava ao topo)
+    var corpoAntes = document.querySelector('.tv-corpo');
+    var posAntes = corpoAntes ? corpoAntes.scrollTop : 0;
+    renderRota();
+    var corpoDepois = document.querySelector('.tv-corpo');
+    if(corpoDepois) corpoDepois.scrollTop = posAntes;
+  }, 220));
   document.addEventListener('keydown', function(e){ if(e.key==='Escape' && VIEW.rota==='tv'){ lsDel('tvMode'); irPara('login'); } });
   renderRota();
 }
