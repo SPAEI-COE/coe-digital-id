@@ -282,6 +282,24 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .diag-res.ok{display:block;background:#e8f6ec;border:1px solid #7cc496;color:#14532d}
 .diag-res.erro{display:block;background:#fdecea;border:1px solid #e0a19a;color:#7f1d1d;font-weight:600}
 .diag-pre{background:#0e1526;color:#cfe0ff;padding:1em;border-radius:var(--r-sm);font-family:var(--mono),ui-monospace,monospace;font-size:.72rem;line-height:1.5;overflow:auto;max-height:60vh;white-space:pre-wrap;word-break:break-word}
+.hier{display:flex;flex-direction:column;gap:1.6em}
+.hier-comando{display:flex;flex-direction:column;align-items:center;gap:.5em;padding:.5em 0 1em}
+.hier-cargo{display:flex;flex-direction:column;align-items:center;gap:.4em;width:min(15em,80%)}
+.hier-cargo-rot{font-family:var(--display);font-weight:600;font-size:.72em;letter-spacing:.14em;color:var(--azul-700);text-transform:uppercase}
+.hier-seta{font-size:1.4em;color:var(--ouro);line-height:.6}
+.hier-secoes{display:flex;flex-direction:column;gap:1.4em}
+.hier-secao{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1em 1.1em 1.2em}
+.hier-secao-tit{font-family:var(--display);font-weight:600;font-size:1em;color:var(--azul-800);text-transform:uppercase;letter-spacing:.1em;padding-bottom:.5em;margin-bottom:.7em;border-bottom:2px solid var(--ouro-claro);display:flex;align-items:baseline;gap:.6em}
+.hier-secao-tit small{font-family:var(--mono);font-size:.6em;color:var(--grafite-700);letter-spacing:0}
+.hier-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5em,1fr));gap:.85em}
+.hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:12em}
+.hier-chefe-rot{font-family:var(--display);font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--ouro);text-transform:uppercase}
+.hier-linha-ouro{height:2px;background:linear-gradient(90deg,var(--ouro-claro),var(--ouro),transparent);margin:.9em 0;opacity:.7}
+.hier--tv .hier-secao{background:linear-gradient(158deg,rgba(251,252,254,.10),rgba(225,230,239,.05));border-color:rgba(207,212,220,.25)}
+.hier--tv .hier-secao-tit{color:var(--ouro-claro)}
+.hier--tv .hier-secao-tit small{color:var(--prata-300)}
+.hier--tv .hier-cargo-rot{color:var(--prata-300)}
+.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(max(8.5em,calc((100% - 5*.85em)/6)),1fr))}
 </style>
 </head>
 <body>
@@ -316,7 +334,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v12 · 2026-07-28 · corrige login anônimo da TV substituindo sessão real de admin (causa raiz real de permissão negada)';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v13 · 2026-07-29 · Dashboard Hierárquico (CMT→SUBCMT→seções, chefe→demais, máx 6/linha) no admin e na TV (#/tv-hier) + modo Grade compacta na TV';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -362,7 +380,7 @@ function motivoAuth(){
 }
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false,
-  tvEscalaLocal: null, tvModoLocal: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
+  tvEscalaLocal: null, tvModoLocal: null, tvDensLocal: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
 var ESPECIALIDADES_PADRAO = ['Blindados','Máquinas Pesadas','Demolição/EOD','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Cond. Viaturas Especiais','Telemática/TI','Instrutor'];
 var TIPOS_SANGUINEOS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
@@ -909,6 +927,7 @@ function renderRota(){
   var r = rota(), app = $('#app');
   if(!app) return;
   if(/^v\//.test(r)){ VIEW.rota='pub'; desenhaAviso(); renderPublico(app, r.slice(2)); return; }
+  if(/^tv-hier([/?#].*)?$/i.test(r)){ VIEW.rota='tv'; desenhaAviso(); renderTVHier(app); return; }
   if(/^tv([/?#].*)?$/i.test(r)){ VIEW.rota='tv'; desenhaAviso(); renderTV(app); return; }
   if(r==='admin'){
     var v = sessValida();
@@ -1261,6 +1280,40 @@ function cardPM(m, opts){
    ============================================================ */
 var TV_TIMERS = [];
 function pararTV(){ TV_TIMERS.forEach(clearInterval); TV_TIMERS=[]; VIEW.tvTimer=null; }
+/* Painel TV do Dashboard Hierárquico (SRS §10) — mesmo chrome/escala da TV
+   principal, corpo rolável, sem timer. Reutiliza montaHierarquia(). */
+function renderTVHier(app){
+  pararTV(); lsSet('tvMode', true); app.innerHTML='';
+  if(VIEW.tvEscalaLocal===null){ var _eL=lsGet('tvEscalaLocal'); if(_eL!=null) VIEW.tvEscalaLocal=_eL; }
+  var esc100 = Math.min(150, Math.max(50, VIEW.tvEscalaLocal!=null ? VIEW.tvEscalaLocal : (+CFG.escala||100)));
+  var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920));
+  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
+  var relog = el('div',{cls:'s2'});
+  raiz.appendChild(el('div',{cls:'tv-topo'},[
+    el('img',{src:window.__BRASAO__,alt:''}),
+    el('div',{},[
+      el('div',{cls:'t1',text:'Comando de Operações Especiais'}),
+      el('div',{cls:'t2',text:'Estrutura Hierárquica · COE P1 Funcional'})
+    ]),
+    el('div',{cls:'tv-sec'},[el('div',{cls:'s1',text:'Cadeia de comando'}), relog]),
+    el('span',{cls:'pino'+(ONLINE?' on':''),id:'pino',style:'margin-left:1.2em'},[el('i'),el('span',{text:ONLINE?'Banco conectado':'Sem conexão'})])
+  ]));
+  raiz.appendChild(el('div',{cls:'faixa-ouro'}));
+  var corpo = el('div',{cls:'tv-corpo tv-corpo--rolavel'});
+  corpo.appendChild(montaHierarquia({tv:true}));
+  raiz.appendChild(corpo);
+  function ajustar(delta){ var atual=Math.min(150,Math.max(50,VIEW.tvEscalaLocal!=null?VIEW.tvEscalaLocal:(+CFG.escala||100))); VIEW.tvEscalaLocal=Math.min(150,Math.max(50,atual+delta)); lsSet('tvEscalaLocal',VIEW.tvEscalaLocal); renderTVHier(app); }
+  var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[
+    el('button',{cls:'tv-voltar',onclick:function(){ irPara('tv'); }},['▦ Ver grade do efetivo']),
+    el('button',{cls:'tv-voltar',title:'Diminuir — só deste televisor',onclick:function(){ ajustar(-10); }},['A−']),
+    el('button',{cls:'tv-voltar',title:'Aumentar — só deste televisor',onclick:function(){ ajustar(10); }},['A+']),
+    el('span',{text:'Escala '+esc100+'%'+(VIEW.tvEscalaLocal!=null?' (ajuste deste televisor)':'')+' · role para ver mais'})
+  ]);
+  raiz.appendChild(rod);
+  app.appendChild(raiz);
+  function tick(){ var d=new Date(); relog.textContent=d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'})+' · '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+  tick(); TV_TIMERS.push(setInterval(tick, 30000));
+}
 function renderTV(app){
   pararTV();
   lsSet('tvMode', true);
@@ -1306,7 +1359,11 @@ function renderTV(app){
     var titH0 = pt.getBoundingClientRect().height;
     probe.remove();
     var cromo = cardH0 - probeW*(4/3);                   // topo+base medidos a 16px
-    var fotoMin = 8.6*fs;                                // largura mínima digna da foto
+    // Piso da foto ajustável: "Compacto" adensa a grade (mais cards/linha) sem
+    // deixar a foto ilegível; "Padrão" mantém o piso original. Só deste televisor.
+    var densTV = VIEW.tvDensLocal || lsGet('tvDensLocal') || 'padrao';
+    var fotoMinEm = densTV==='compacto' ? 6.4 : 8.6;
+    var fotoMin = fotoMinEm*fs;                          // largura mínima digna da foto
     function calc(cols){
       var cardW = (w-gap*(cols-1))/cols;
       var fsG = 16*cardW/260;                            // fonte do card proporcional à largura
@@ -1352,6 +1409,17 @@ function renderTV(app){
       el('button',{cls:'tv-voltar',title:'Diminuir o tamanho — vale só para este televisor',onclick:function(){ ajustarEscalaTV(-10); }},['A−']),
       el('button',{cls:'tv-voltar',title:'Aumentar o tamanho — vale só para este televisor',onclick:function(){ ajustarEscalaTV(10); }},['A+'])
     ];
+  }
+  function densAtual(){ return VIEW.tvDensLocal || lsGet('tvDensLocal') || 'padrao'; }
+  function alternarDensTV(){
+    // Compacto adensa a grade (foto menor, porém legível) — mais cards por
+    // linha. Padrão mantém o piso original. Só deste televisor, nunca ao banco.
+    VIEW.tvDensLocal = densAtual()==='compacto' ? 'padrao' : 'compacto';
+    lsSet('tvDensLocal', VIEW.tvDensLocal);
+    desenharFluxo();
+  }
+  function botaoDensTV(){
+    return el('button',{cls:'tv-voltar',title:'Alterna entre grade compacta (mais cards) e padrão — vale só para este televisor',onclick:alternarDensTV},[densAtual()==='compacto' ? '▤ Grade padrão' : '▦ Grade compacta']);
   }
   function tilesPastas(){
     corpo.innerHTML='';
@@ -1401,7 +1469,7 @@ function renderTV(app){
     }
     corpo.appendChild(fluxo);
     var rodAntigo = raiz.querySelector('.tv-rodape--fixo'); if(rodAntigo) rodAntigo.remove();
-    var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoTV()].concat(botoesZoomTV()));
+    var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoTV(),botaoDensTV()].concat(botoesZoomTV()));
     if(modoAtual()==='pastas'){
       rod.appendChild(el('button',{cls:'tv-voltar',onclick:function(){ VIEW.tvPasta=null; desenharFluxo(); }},['← Voltar às pastas']));
     }
@@ -1432,6 +1500,7 @@ function renderTV(app){
    ============================================================ */
 var MENU = [
   {id:'dash', rot:'📊 Dashboard'},
+  {id:'hier', rot:'🏛 Dashboard Hierárquico'},
   {id:'rel', rot:'📈 Relatórios'},
   {id:'gerador', rot:'🔎 Gerador de Relatórios'},
   {id:'efetivo', rot:'🪖 Efetivo'},
@@ -1476,7 +1545,7 @@ function renderAdmin(app){
   ]);
   app.appendChild(raiz);
   var main = $('#admMain');
-  ({dash:vDash,rel:vRelatorios,gerador:vGerador,efetivo:vEfetivo,secoes:vSecoes,categs:vCategorias,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
+  ({dash:vDash,hier:vHierarquico,rel:vRelatorios,gerador:vGerador,efetivo:vEfetivo,secoes:vSecoes,categs:vCategorias,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
 }
 
 /* ---- Diagnóstico ----
@@ -1625,6 +1694,67 @@ function vDash(main){
     ]));
   });
   main.appendChild(pn);
+}
+
+/* ============================================================
+   DASHBOARD HIERÁRQUICO (SRS §10)
+   COMANDANTE → SUBCOMANDANTE → SEÇÕES (chefe → demais).
+   Reutiliza ordemSecoes/membrosSecao/cmpPosto/cardPM — nenhum
+   código de dados/ordenação é duplicado. Máx. 6 cards por linha.
+   ============================================================ */
+function topoInstitucional(){
+  /* Comandante e Subcomandante = os dois militares de maior posto do efetivo
+     geral (a ordem de posto já é a verdade hierárquica do app). Se o efetivo
+     tiver menos de 2, devolve o que houver — nunca quebra. */
+  var ger = efetivo().slice().sort(cmpPosto);
+  return { cmt: ger[0]||null, subcmt: ger[1]||null };
+}
+function montaHierarquia(opts){
+  opts = opts||{};
+  var wrap = el('div',{cls:'hier'+(opts.tv?' hier--tv':'')});
+  var topo = topoInstitucional();
+  // Faixa de comando
+  var faixa = el('div',{cls:'hier-comando'});
+  if(topo.cmt){
+    faixa.appendChild(el('div',{cls:'hier-cargo'},[el('div',{cls:'hier-cargo-rot',text:'COMANDANTE'}), cardPM(topo.cmt, opts.cardOpts||{})]));
+  }
+  if(topo.subcmt){
+    faixa.appendChild(el('div',{cls:'hier-seta',text:'↓'}));
+    faixa.appendChild(el('div',{cls:'hier-cargo'},[el('div',{cls:'hier-cargo-rot',text:'SUBCOMANDANTE'}), cardPM(topo.subcmt, opts.cardOpts||{})]));
+  }
+  wrap.appendChild(faixa);
+  // Seções: cada uma com chefe (maior posto) separado dos demais, máx 6/linha.
+  // O comando institucional (cmt/subcmt) não se repete nas seções.
+  var jaNoTopo = {}; if(topo.cmt) jaNoTopo[topo.cmt.rg]=1; if(topo.subcmt) jaNoTopo[topo.subcmt.rg]=1;
+  var secs = ordemSecoes().filter(function(s){ return (CFG.ocultas||[]).indexOf(s)<0 && membrosSecao(s).length; });
+  var grid = el('div',{cls:'hier-secoes'});
+  secs.forEach(function(s){
+    var ms = membrosSecao(s).filter(function(m){ return !jaNoTopo[m.rg]; });
+    if(!ms.length) return;
+    var chefe = ms[0], resto = ms.slice(1);
+    var bloco = el('div',{cls:'hier-secao'});
+    bloco.appendChild(el('div',{cls:'hier-secao-tit'},[nomeSecao(s), el('small',{text:ms.length+' PM'})]));
+    var linha = el('div',{cls:'hier-cards'});
+    if(chefe) linha.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:'CHEFE'}), cardPM(chefe, opts.cardOpts||{})]));
+    bloco.appendChild(linha);
+    if(resto.length){
+      bloco.appendChild(el('div',{cls:'hier-linha-ouro'}));
+      var grd = el('div',{cls:'hier-cards'});
+      resto.forEach(function(m){ grd.appendChild(cardPM(m, opts.cardOpts||{})); });
+      bloco.appendChild(grd);
+    }
+    grid.appendChild(bloco);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+function vHierarquico(main){
+  main.appendChild(el('div',{cls:'adm-h1'},['Dashboard Hierárquico']));
+  main.appendChild(el('div',{cls:'sep-dash',text:'Estrutura de comando e seções'}));
+  main.appendChild(el('div',{style:'margin-bottom:1em'},[
+    el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ window.open(location.pathname+'#/tv-hier','_blank'); }},['▶ Abrir no painel TV'])
+  ]));
+  main.appendChild(montaHierarquia({cardOpts:{click:function(m){ VIEW.fichaRG=m.rg; VIEW.abaAdm='efetivo'; renderRota(); }}}));
 }
 
 /* ============================================================
