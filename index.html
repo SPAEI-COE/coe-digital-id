@@ -81,6 +81,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .card-pm__nome{font-family:var(--display);font-weight:600;font-size:.86em;line-height:1.12;text-transform:uppercase;color:var(--azul-900);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.24em}
 .card-pm__rg{font-family:var(--mono);font-size:.68em;font-weight:700;color:var(--grafite-700)}
 .card-pm__funcao{font-size:.62em;color:#4a5262;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card-pm__selo{display:inline-block;font-family:var(--display),sans-serif;font-weight:700;font-size:.52em;letter-spacing:.08em;text-transform:uppercase;color:#3a2e00;background:var(--ouro-claro,#e6cf5a);border-radius:.5em;padding:.15em .5em;margin-bottom:.25em}
+.card-pm__selo--event{color:#fff;background:#c47a00}
+.card-pm--chefe{outline:2px solid var(--ouro,#c8aa00);outline-offset:-2px}
 .card-pm__tags{display:flex;gap:.35em;flex-wrap:wrap;margin-top:.1em}
 .tag{font-size:.55em;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:.25em .6em;border-radius:3px}
 .tag-ok{background:#e3f5ea;color:var(--ok)}.tag-alerta{background:#fdf1e0;color:var(--alerta)}.tag-erro{background:#fbe7e4;color:var(--erro)}.tag-azul{background:#e6e6f7;color:var(--azul-700)}.tag-cinza{background:var(--prata-200);color:var(--grafite-700)}
@@ -342,7 +345,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v15 · 2026-07-29 · TV usa CSS Grid auto-fill (corrige cards gigantes no 1º render, causa raiz: medição JS antes do layout) + Seções em Pastas no admin + grade sem teto de colunas';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v16 · 2026-07-29 · Gestão de chefias e funções acumuladas (§9): chefe sempre oficial (Asp Of+), praça nunca chefia, chefia eventual/interina acumulável; editor admin de chefias';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -674,6 +677,34 @@ function efetivo(){
 }
 function ordemPosto(p){ var i=POSTOS.indexOf(p); return i<0?POSTOS.length:i; }
 function cmpPosto(a,b){ var d=ordemPosto(a.posto)-ordemPosto(b.posto); return d||a.nome.localeCompare(b.nome,'pt-BR'); }
+/* ============================================================
+   CHEFIA E FUNÇÕES ACUMULADAS (SRS §9)
+   Regra institucional inegociável: chefe é SEMPRE oficial. No COE,
+   oficial = Asp Of PM para cima; Sub Ten PM para baixo é praça, e
+   praça NUNCA vira chefe (nem por antiguidade, nem como fallback).
+   Um oficial pode acumular chefias de outras seções (ex.: assumir a
+   P4 quando o titular sai de férias) — nessa seção ele é "chefe
+   eventual" (interino) até o admin promovê-lo a titular.
+   Modelo (campos novos em coep1/mil, compatíveis com o cadastro atual):
+     m.chefias      = [seções que ele chefia como TITULAR]
+     m.chefiasEvent = [subconjunto assumido como EVENTUAL/interino]
+     m.funcoes      = [funções acumuladas] (m.funcao continua a principal)
+   ============================================================ */
+var CORTE_PRACA = POSTOS.indexOf('Sub Ten PM');   // índice do 1º praça
+function ehOficial(m){ return m && ordemPosto(m.posto) < CORTE_PRACA; }
+function chefiasDe(m){ return (m && m.chefias) || []; }
+function chefiaEventual(m, s){ return !!(m && m.chefiasEvent && m.chefiasEvent.indexOf(s)>=0); }
+/* Retorna o chefe designado da seção (oficial). Se houver mais de um
+   oficial com a seção em chefias, o de maior posto encabeça. Se ninguém
+   foi designado, cai no oficial de maior posto presente na seção. Nunca
+   devolve praça. */
+function chefeDaSecao(s, membros){
+  membros = membros || membrosSecao(s);
+  var designados = membros.filter(function(m){ return ehOficial(m) && chefiasDe(m).indexOf(s)>=0; });
+  if(designados.length) return designados.sort(cmpPosto)[0];
+  var oficiais = membros.filter(ehOficial);
+  return oficiais.length ? oficiais.sort(cmpPosto)[0] : null;   // sem oficial → sem chefe
+}
 function ordemSecoes(){
   var base = (CFG.ordem && CFG.ordem.length) ? CFG.ordem.slice() : ORDEM_PADRAO.slice();
   var presentes = {};
@@ -690,7 +721,13 @@ function membrosSecao(s){
     var set = {}; (p.membros||[]).forEach(function(rg){ set[rg]=1; });
     return tudo.filter(function(m){ return set[m.rg]; }).sort(cmpPosto);
   }
-  return tudo.filter(function(m){ return m.reparticao===s; }).sort(cmpPosto);
+  // Lotados na seção + oficiais que assumiram a chefia dela (acumulação),
+  // sem duplicar quem já é lotado. Assim o "chefe eventual" aparece na
+  // seção que assumiu, além de continuar na seção de origem.
+  var vis = {};
+  tudo.forEach(function(m){ if(m.reparticao===s) vis[m.rg]=m; });
+  tudo.forEach(function(m){ if(!vis[m.rg] && ehOficial(m) && chefiasDe(m).indexOf(s)>=0) vis[m.rg]=m; });
+  return Object.keys(vis).map(function(rg){ return vis[rg]; }).sort(cmpPosto);
 }
 function vencMaisProximo(m){
   var hj = new Date(hoje()+'T00:00:00');
@@ -1265,7 +1302,7 @@ function cardPM(m, opts){
   var v = vencMaisProximo(m);
   if(v && v.dias<0) tags.appendChild(el('span',{cls:'tag tag-erro',text:'Doc. vencido'}));
   else if(v && v.dias<=60) tags.appendChild(el('span',{cls:'tag tag-alerta',text:'Vence '+v.dias+'d'}));
-  var c = el('div',{cls:'card-pm',tabindex:opts.click?'0':null},[
+  var c = el('div',{cls:'card-pm'+(opts.selo?' card-pm--chefe':''),tabindex:opts.click?'0':null},[
     el('div',{cls:'card-pm__topo'},[
       el('img',{cls:'card-pm__brasao',src:window.__BRASAO__,alt:''}),
       el('div',{cls:'card-pm__posto',text:m.posto||'—'}),
@@ -1273,6 +1310,7 @@ function cardPM(m, opts){
     ]),
     foto,
     el('div',{cls:'card-pm__base'},[
+      opts.selo ? el('div',{cls:'card-pm__selo'+(/EVENTUAL/.test(opts.selo)?' card-pm__selo--event':''),text:opts.selo}) : null,
       el('div',{cls:'card-pm__nome',text:m.nome}),
       el('div',{cls:'card-pm__rg',text:'RG '+m.rg}),
       el('div',{cls:'card-pm__funcao',text:m.funcao||''}),
@@ -1461,8 +1499,9 @@ function renderTV(app){
     var grade = el('div',{cls:'tv-grade',style:'grid-template-columns:repeat(auto-fill,minmax('+fotoMinCol()+',1fr));font-size:'+gradeFS.toFixed(2)+'px;gap:'+md.gap.toFixed(1)+'px'});
     grade.appendChild(el('div',{cls:'tv-secao-titulo'},[nomeSecao(s), el('small',{text:membrosSecao(s).length+' PM'})]));
     var ms = membrosSecao(s);
-    var chefe = ms[0], resto = ms.slice(1);
-    if(chefe) grade.appendChild(cardPM(chefe,{}));
+    var chefe = chefeDaSecao(s, ms);
+    var resto = ms.filter(function(m){ return !chefe || m.rg!==chefe.rg; });
+    if(chefe) grade.appendChild(cardPM(chefe,{selo: chefiaEventual(chefe,s)?'CHEFE EVENTUAL':'CHEFE'}));
     if(resto.length){
       grade.appendChild(el('div',{cls:'tv-linha-ouro'}));
       resto.forEach(function(m){ grade.appendChild(cardPM(m,{})); });
@@ -1746,11 +1785,13 @@ function montaHierarquia(opts){
   secs.forEach(function(s){
     var ms = membrosSecao(s).filter(function(m){ return !jaNoTopo[m.rg]; });
     if(!ms.length) return;
-    var chefe = ms[0], resto = ms.slice(1);
+    var chefe = chefeDaSecao(s, ms);
+    if(chefe && jaNoTopo[chefe.rg]) chefe = null;   // se o chefe é o próprio CMT/SUBCMT, não repete
+    var resto = ms.filter(function(m){ return !chefe || m.rg!==chefe.rg; });
     var bloco = el('div',{cls:'hier-secao'});
     bloco.appendChild(el('div',{cls:'hier-secao-tit'},[nomeSecao(s), el('small',{text:ms.length+' PM'})]));
     var linha = el('div',{cls:'hier-cards'});
-    if(chefe) linha.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:'CHEFE'}), cardPM(chefe, opts.cardOpts||{})]));
+    if(chefe) linha.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:chefiaEventual(chefe,s)?'CHEFE EVENTUAL':'CHEFE'}), cardPM(chefe, opts.cardOpts||{})]));
     bloco.appendChild(linha);
     if(resto.length){
       bloco.appendChild(el('div',{cls:'hier-linha-ouro'}));
@@ -1784,12 +1825,14 @@ function vSecoesPastas(main){
     var s = VIEW.pastaSel;
     main.appendChild(el('button',{cls:'btn btn-borda btn-min',style:'margin-bottom:.9em',onclick:function(){ VIEW.pastaSel=null; renderRota(); }},['← Voltar às pastas']));
     var ms = membrosSecao(s);                       // já vem ordenado por cmpPosto (posto→nome)
+    var chefe = chefeDaSecao(s, ms);
+    var resto = ms.filter(function(m){ return !chefe || m.rg!==chefe.rg; });
     main.appendChild(el('div',{cls:'hier-secao'},[
       el('div',{cls:'hier-secao-tit'},[nomeSecao(s), el('small',{text:ms.length+' PM'})]),
       (function(){
         var wrap = el('div',{cls:'hier-cards'});
-        if(ms[0]) wrap.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:'CHEFE'}), cardPM(ms[0],{click:abreFicha})]));
-        ms.slice(1).forEach(function(m){ wrap.appendChild(cardPM(m,{click:abreFicha})); });
+        if(chefe) wrap.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:chefiaEventual(chefe,s)?'CHEFE EVENTUAL':'CHEFE'}), cardPM(chefe,{click:abreFicha})]));
+        resto.forEach(function(m){ wrap.appendChild(cardPM(m,{click:abreFicha})); });
         return wrap;
       })()
     ]));
@@ -2591,12 +2634,65 @@ function abaIdent(area, m, md){
   ], d);
   area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin-bottom:.6em',text:'Dados do card (aparecem na TV)'}));
   area.appendChild(base.no);
+
+  // ---- §9: Chefias (só oficiais) — seção de origem + chefias acumuladas ----
+  var chefiasSel = (m.chefias||[]).slice();
+  var eventSel   = (m.chefiasEvent||[]).slice();
+  area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin:1.1em 0 .6em',text:'Chefias'}));
+  var chefWrap = el('div');
+  function pintaChefias(){
+    chefWrap.innerHTML='';
+    // regra institucional: chefe é sempre oficial (Asp Of pra cima). Praça não chefia.
+    if(!ehOficial({posto: base.ler().posto})){
+      chefWrap.appendChild(el('div',{cls:'aviso-inline',style:'font-size:.8rem;color:#7a2b00;background:#fff3e6;border:1px solid #f0c090;border-radius:8px;padding:.6em .8em',
+        text:'Somente oficiais (Asp Of PM para cima) podem ser chefes de seção. Ajuste o posto acima para habilitar chefias.'}));
+      chefiasSel = []; eventSel = [];
+      return;
+    }
+    chefWrap.appendChild(el('p',{style:'font-size:.76rem;color:#4a5262;margin:.2em 0 .5em',text:'Marque as seções que este oficial chefia. Uma chefia fora da seção de lotação aparece como "chefe eventual" até você confirmá-la como titular.'}));
+    var box = el('div',{cls:'tags-sel'});
+    ordemSecoes().filter(function(s){return s[0]!=='@';}).forEach(function(s){
+      var on = chefiasSel.indexOf(s)>=0;
+      box.appendChild(el('button',{type:'button',cls:'tagbtn'+(on?' on':''),onclick:function(){
+        var i=chefiasSel.indexOf(s);
+        if(i>=0){ chefiasSel.splice(i,1); var e=eventSel.indexOf(s); if(e>=0) eventSel.splice(e,1); }
+        else {
+          chefiasSel.push(s);
+          // chefia fora da seção de lotação entra como EVENTUAL por padrão
+          if(s!==base.ler().reparticao && eventSel.indexOf(s)<0) eventSel.push(s);
+        }
+        pintaChefias();
+      }},[nomeSecao(s)]));
+    });
+    chefWrap.appendChild(box);
+    // Para cada chefia marcada, permitir alternar Titular/Eventual
+    if(chefiasSel.length){
+      var det = el('div',{style:'margin-top:.6em;display:flex;flex-direction:column;gap:.35em'});
+      chefiasSel.forEach(function(s){
+        var ev = eventSel.indexOf(s)>=0;
+        det.appendChild(el('div',{style:'display:flex;align-items:center;gap:.6em;font-size:.8rem'},[
+          el('span',{style:'min-width:9em;font-weight:600',text:nomeSecao(s)}),
+          el('button',{type:'button',cls:'btn btn-min '+(ev?'btn-borda':'btn-ouro'),onclick:function(){
+            var e=eventSel.indexOf(s); if(e>=0) eventSel.splice(e,1); else eventSel.push(s); pintaChefias();
+          }},[ev?'Chefe eventual (clique p/ tornar titular)':'Chefe titular (clique p/ eventual)'])
+        ]));
+      });
+      chefWrap.appendChild(det);
+    }
+  }
+  pintaChefias();
+  area.appendChild(chefWrap);
+
   area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin:1.1em 0 .6em',text:'Identificação civil'}));
   area.appendChild(extra.no);
   area.appendChild(botaoSalvar(function(){
     if(!base.valido() || !extra.valido()) return false;
     var b = base.ler(); b.nome = (b.nome||'').toUpperCase();
     if(!b.nome){ toast('O nome não pode ficar em branco.','erro'); return false; }
+    // §9: trava institucional — praça nunca chefia. Se o posto não é de oficial,
+    // qualquer chefia marcada é descartada no salvamento.
+    if(ehOficial({posto:b.posto})){ b.chefias = chefiasSel.slice(); b.chefiasEvent = eventSel.filter(function(s){return chefiasSel.indexOf(s)>=0;}); }
+    else { b.chefias = []; b.chefiasEvent = []; }
     return salvarConjunto(m.rg, b, 'ident', extra.ler(), 'identificação de '+m.rg);
   }, md));
 }
