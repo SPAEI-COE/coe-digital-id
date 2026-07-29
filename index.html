@@ -301,7 +301,13 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier--tv .hier-secao-tit{color:var(--ouro-claro)}
 .hier--tv .hier-secao-tit small{color:var(--prata-300)}
 .hier--tv .hier-cargo-rot{color:var(--prata-300)}
-.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(max(8.5em,calc((100% - 5*.85em)/6)),1fr))}
+.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(8.5em,1fr))}
+.pastas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.9em}
+.pasta-card{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1.1em .9em;text-align:center;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
+.pasta-card:hover,.pasta-card:focus{transform:translateY(-2px);box-shadow:0 6px 18px rgba(9,0,141,.12);border-color:var(--ouro-claro);outline:none}
+.pasta-ico{font-size:2em;line-height:1}
+.pasta-nome{font-family:var(--display);font-weight:600;font-size:.9em;color:var(--azul-800);text-transform:uppercase;letter-spacing:.06em;margin-top:.4em}
+.pasta-cont{font-size:.72em;color:var(--grafite-700);margin-top:.25em}
 </style>
 </head>
 <body>
@@ -336,7 +342,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v14 · 2026-07-29 · Slider de escala da TV em tempo real (50–150%, só deste televisor) — FASE 4; mantém Dashboard Hierárquico e Grade compacta';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v15 · 2026-07-29 · TV usa CSS Grid auto-fill (corrige cards gigantes no 1º render, causa raiz: medição JS antes do layout) + Seções em Pastas no admin + grade sem teto de colunas';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -382,7 +388,7 @@ function motivoAuth(){
 }
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false,
-  tvEscalaLocal: null, tvModoLocal: null, tvDensLocal: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
+  tvEscalaLocal: null, tvModoLocal: null, tvDensLocal: null, pastaSel: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
 var ESPECIALIDADES_PADRAO = ['Blindados','Máquinas Pesadas','Demolição/EOD','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Cond. Viaturas Especiais','Telemática/TI','Instrutor'];
 var TIPOS_SANGUINEOS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
@@ -1346,42 +1352,21 @@ function renderTV(app){
   var secs = ordemSecoes().filter(function(s){ return (CFG.ocultas||[]).indexOf(s)<0 && membrosSecao(s).length; });
   if(modoAtual()==='pastas' && VIEW.tvPasta && secs.indexOf(VIEW.tvPasta)<0) VIEW.tvPasta = null;
   var colsAtual = 4, gradeFS = 16;
-  function medidas(){
-    // mede um card real (verdade do navegador — rito) e escolhe a maior
-    // capacidade possível SEM sacrificar a foto (regra central do app)
-    var fs = parseFloat(raiz.style.fontSize);
-    var w = corpo.clientWidth - 2*1.4*fs, gap = Math.max(12, .85*fs);
-    var probe = el('div',{cls:'tv-grade',style:'position:absolute;visibility:hidden;left:0;top:0;width:300px;grid-template-columns:1fr;font-size:16px'});
-    var pc = cardPM(efetivo()[0]||{rg:'00000',nome:'PROVA DE MEDIDA DO CARD',posto:'Sd PM',funcao:'Medição',reparticao:'P1',situacao:'ATIVO',aptidoes:[],cursos:[]},{});
-    var pt = el('div',{cls:'tv-secao-titulo'},['MEDIDA',el('small',{text:'0 PM'})]);
-    probe.appendChild(pt); probe.appendChild(pc);
-    corpo.appendChild(probe);
-    var probeW = 300;
-    var cardH0 = pc.getBoundingClientRect().height;      // altura do card com 300px de largura
-    var titH0 = pt.getBoundingClientRect().height;
-    probe.remove();
-    var cromo = cardH0 - probeW*(4/3);                   // topo+base medidos a 16px
-    // Piso da foto ajustável: "Compacto" adensa a grade (mais cards/linha) sem
-    // deixar a foto ilegível; "Padrão" mantém o piso original. Só deste televisor.
+  function fotoMinCol(){
+    // Piso da coluna = largura mínima digna da foto, em em (acompanha densidade).
+    // É o mesmo valor que garante a foto legível; o CSS Grid não cria coluna
+    // menor que isso, então a foto nunca é sacrificada (regra central do app).
     var densTV = VIEW.tvDensLocal || lsGet('tvDensLocal') || 'padrao';
-    var fotoMinEm = densTV==='compacto' ? 6.4 : 8.6;
-    var fotoMin = fotoMinEm*fs;                          // largura mínima digna da foto
-    function calc(cols){
-      var cardW = (w-gap*(cols-1))/cols;
-      var fsG = 16*cardW/260;                            // fonte do card proporcional à largura
-      var cardH = cardW*(4/3) + cromo*fsG/16;
-      return {cols:cols, cardW:cardW, cardH:cardH, titH:titH0*fsG/16, fsGrade:fsG};
-    }
-    var melhor = null;
-    var colsMax = Math.max(2, Math.floor((w+gap)/(fotoMin+gap)));
-    for(var cols=2; cols<=colsMax; cols++){
-      var cand = calc(cols);
-      if(cand.cardW < fotoMin) break;                    // PRIORIDADE 1: foto visível
-      if(!melhor || cand.cardW>melhor.cardW) melhor = cand;
-    }
-    if(!melhor) melhor = calc(2);                        // tela muito pequena: foto acima de tudo
-    colsAtual = melhor.cols; gradeFS = melhor.fsGrade;
-    return { cols:melhor.cols, gap:gap, cardH:melhor.cardH, titH:melhor.titH };
+    return (densTV==='compacto' ? 8.5 : 11) + 'em';
+  }
+  function medidas(){
+    // §4/§5: NÃO calcula mais nº de colunas por clientWidth (o CSS Grid auto-fill
+    // faz isso no timing certo — a medição JS antes do layout era a causa raiz do
+    // "cards gigantes no 1º render"). Aqui só define a fonte-base da grade e o gap,
+    // proporcionais à escala atual — valores estáveis, independentes de largura.
+    var fs = parseFloat(raiz.style.fontSize);
+    gradeFS = 16;                         // a fonte do card escala junto com a grade via em
+    return { gap: Math.max(12, .85*fs), fsGrade: 16 };
   }
   function modoAtual(){ return VIEW.tvModoLocal || CFG.modoTV; }
   function alternarModoTV(){
@@ -1467,7 +1452,13 @@ function renderTV(app){
      o chefe (primeiro após ordenar por posto) separado do resto da equipe
      por uma linha dourada dentro do próprio fluxo. Sem timer de troca. ---- */
   function montaGradeSecao(s, md){
-    var grade = el('div',{cls:'tv-grade',style:'grid-template-columns:repeat('+colsAtual+',1fr);font-size:'+gradeFS.toFixed(2)+'px;gap:'+md.gap.toFixed(1)+'px'});
+    // §4/§5: colunas via CSS Grid auto-fill/minmax (mesmo mecanismo do Dashboard
+    // Hierárquico). O NAVEGADOR calcula quantos cards cabem, no momento certo do
+    // layout — elimina a medição JS de clientWidth que, no 1º render (antes do
+    // reflow, clientWidth≈0), gerava poucas colunas e cards gigantes. Sem teto:
+    // 6, 7, 8+ conforme a largura. O piso minmax é o fotoMin (regra central: foto
+    // sempre legível), então a foto nunca é sacrificada.
+    var grade = el('div',{cls:'tv-grade',style:'grid-template-columns:repeat(auto-fill,minmax('+fotoMinCol()+',1fr));font-size:'+gradeFS.toFixed(2)+'px;gap:'+md.gap.toFixed(1)+'px'});
     grade.appendChild(el('div',{cls:'tv-secao-titulo'},[nomeSecao(s), el('small',{text:membrosSecao(s).length+' PM'})]));
     var ms = membrosSecao(s);
     var chefe = ms[0], resto = ms.slice(1);
@@ -1524,6 +1515,7 @@ function renderTV(app){
 var MENU = [
   {id:'dash', rot:'📊 Dashboard'},
   {id:'hier', rot:'🏛 Dashboard Hierárquico'},
+  {id:'pastas', rot:'🗂 Seções em Pastas'},
   {id:'rel', rot:'📈 Relatórios'},
   {id:'gerador', rot:'🔎 Gerador de Relatórios'},
   {id:'efetivo', rot:'🪖 Efetivo'},
@@ -1568,7 +1560,7 @@ function renderAdmin(app){
   ]);
   app.appendChild(raiz);
   var main = $('#admMain');
-  ({dash:vDash,hier:vHierarquico,rel:vRelatorios,gerador:vGerador,efetivo:vEfetivo,secoes:vSecoes,categs:vCategorias,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
+  ({dash:vDash,hier:vHierarquico,pastas:vSecoesPastas,rel:vRelatorios,gerador:vGerador,efetivo:vEfetivo,secoes:vSecoes,categs:vCategorias,tvcfg:vTVcfg,links:vLinks,audit:vAudit,admins:vAdmins,diag:vDiag}[VIEW.abaAdm]||vDash)(main);
 }
 
 /* ---- Diagnóstico ----
@@ -1778,6 +1770,46 @@ function vHierarquico(main){
     el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ window.open(location.pathname+'#/tv-hier','_blank'); }},['▶ Abrir no painel TV'])
   ]));
   main.appendChild(montaHierarquia({cardOpts:{click:function(m){ VIEW.fichaRG=m.rg; VIEW.abaAdm='efetivo'; renderRota(); }}}));
+}
+
+/* ============================================================
+   SEÇÕES EM PASTAS (SRS §2) — grade de pastas com TODAS as seções
+   (mesmo as de 1 PM); ao abrir, mostra só os PMs daquela seção em
+   cards, chefe (maior posto) primeiro, mesmo mecanismo do hierárquico.
+   Reutiliza ordemSecoes/membrosSecao/cmpPosto/cardPM — zero duplicação.
+   ============================================================ */
+function vSecoesPastas(main){
+  main.appendChild(el('div',{cls:'adm-h1'},['Seções em Pastas']));
+  if(VIEW.pastaSel){
+    var s = VIEW.pastaSel;
+    main.appendChild(el('button',{cls:'btn btn-borda btn-min',style:'margin-bottom:.9em',onclick:function(){ VIEW.pastaSel=null; renderRota(); }},['← Voltar às pastas']));
+    var ms = membrosSecao(s);                       // já vem ordenado por cmpPosto (posto→nome)
+    main.appendChild(el('div',{cls:'hier-secao'},[
+      el('div',{cls:'hier-secao-tit'},[nomeSecao(s), el('small',{text:ms.length+' PM'})]),
+      (function(){
+        var wrap = el('div',{cls:'hier-cards'});
+        if(ms[0]) wrap.appendChild(el('div',{cls:'hier-chefe-wrap'},[el('div',{cls:'hier-chefe-rot',text:'CHEFE'}), cardPM(ms[0],{click:abreFicha})]));
+        ms.slice(1).forEach(function(m){ wrap.appendChild(cardPM(m,{click:abreFicha})); });
+        return wrap;
+      })()
+    ]));
+    return;
+  }
+  main.appendChild(el('div',{cls:'sep-dash',text:'Clique numa seção para ver o efetivo'}));
+  function abreFicha(m){ VIEW.fichaRG=m.rg; VIEW.abaAdm='efetivo'; renderRota(); }
+  var grade = el('div',{cls:'pastas-grid'});
+  ordemSecoes().filter(function(s){ return (CFG.ocultas||[]).indexOf(s)<0; }).forEach(function(s){
+    var n = membrosSecao(s).length;
+    if(!n && s[0]!=='@') return;                    // seção sem ninguém e sem ser pasta: oculta
+    grade.appendChild(el('div',{cls:'pasta-card',tabindex:'0',
+      onclick:function(){ VIEW.pastaSel=s; renderRota(); },
+      onkeydown:function(e){ if(e.key==='Enter'){ VIEW.pastaSel=s; renderRota(); } }},[
+      el('div',{cls:'pasta-ico',text:'📁'}),
+      el('div',{cls:'pasta-nome',text:nomeSecao(s)}),
+      el('div',{cls:'pasta-cont mono',text:n+' PM'})
+    ]));
+  });
+  main.appendChild(grade);
 }
 
 /* ============================================================
