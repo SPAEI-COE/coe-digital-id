@@ -296,7 +296,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier-secao{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1em 1.1em 1.2em}
 .hier-secao-tit{font-family:var(--display);font-weight:600;font-size:1em;color:var(--azul-800);text-transform:uppercase;letter-spacing:.1em;padding-bottom:.5em;margin-bottom:.7em;border-bottom:2px solid var(--ouro-claro);display:flex;align-items:baseline;gap:.6em}
 .hier-secao-tit small{font-family:var(--mono);font-size:.6em;color:var(--grafite-700);letter-spacing:0}
-.hier-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(9.5em,1fr));gap:.85em}
+.hier-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.6em,1fr));gap:.85em}
+.hier-cards .card-pm{font-size:12.8px}
 .hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:12em}
 .hier-chefe-rot{font-family:var(--display);font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--ouro);text-transform:uppercase}
 .hier-linha-ouro{height:2px;background:linear-gradient(90deg,var(--ouro-claro),var(--ouro),transparent);margin:.9em 0;opacity:.7}
@@ -304,7 +305,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier--tv .hier-secao-tit{color:var(--ouro-claro)}
 .hier--tv .hier-secao-tit small{color:var(--prata-300)}
 .hier--tv .hier-cargo-rot{color:var(--prata-300)}
-.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(8.5em,1fr))}
+.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(6.8em,1fr))}
 .pastas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.9em}
 .pasta-card{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1.1em .9em;text-align:center;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
 .pasta-card:hover,.pasta-card:focus{transform:translateY(-2px);box-shadow:0 6px 18px rgba(9,0,141,.12);border-color:var(--ouro-claro);outline:none}
@@ -334,6 +335,12 @@ var SEED = window.__SEED__ || [];
 var OVR = {};            // overrides/extensões por RG (espelha coep1/mil)
 var FOTOS = {};          // dataURL por RG (espelha coep1/fotos)
 var CFG = { escala: 50, modoTV: 'grade', tempoPag: 12, ordem: null, pastas: {}, ocultas: [], catalogos: { especialidades: null, cursos: [] } };
+/* Coeficiente de renderização dos cards do painel TV: reduz o card em ~20% de
+   fábrica SEM tocar em CFG.escala (que é persistido no banco e definido pelo
+   admin). Aplicado só no fontSize da raiz .tv na hora de renderizar; o slider
+   de escala local (50–150%) continua funcionando por cima, agora relativo a
+   este novo padrão. Um único lugar controla os três pontos de render. */
+var CARD_ESC_TV = 0.8;
 var ADMINS = null;       // carregado sob demanda (login/aba administradores)
 var AUDIT = [];
 var DOCS = {};           // meta de documentos por RG
@@ -345,7 +352,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v17 · 2026-07-30 · CORREÇÃO DE PERSISTÊNCIA: igual() trata container vazio (cursos:[], ocultas:[], pastas:{}) como equivalente à ausência no eco do RTDB — elimina a tarja vermelha falsa ao criar pasta/designar PM';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v18 · 2026-07-30 · Cards −20% no Dashboard Hierárquico (tela e TV) e no painel TV (CARD_ESC_TV, sem tocar em CFG.escala persistido; slider de escala local preservado). Mantém correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -1350,7 +1357,7 @@ function renderTVHier(app){
   if(VIEW.tvEscalaLocal===null){ var _eL=lsGet('tvEscalaLocal'); if(_eL!=null) VIEW.tvEscalaLocal=_eL; }
   var esc100 = Math.min(150, Math.max(50, VIEW.tvEscalaLocal!=null ? VIEW.tvEscalaLocal : (+CFG.escala||100)));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920));
-  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
+  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100*CARD_ESC_TV).toFixed(2)+'px'});
   var relog = el('div',{cls:'s2'});
   raiz.appendChild(el('div',{cls:'tv-topo'},[
     el('img',{src:window.__BRASAO__,alt:''}),
@@ -1385,7 +1392,7 @@ function renderTV(app){
   if(VIEW.tvModoLocal===null){ var _mL=lsGet('tvModoLocal'); if(_mL) VIEW.tvModoLocal=_mL; }
   var esc100 = Math.min(150, Math.max(50, VIEW.tvEscalaLocal!=null ? VIEW.tvEscalaLocal : (+CFG.escala||100)));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920)); // 1080p=1×, 4K=2×
-  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100).toFixed(2)+'px'});
+  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100*CARD_ESC_TV).toFixed(2)+'px'});
   var secLbl = el('div',{cls:'s1'}), relog = el('div',{cls:'s2'});
   raiz.appendChild(el('div',{cls:'tv-topo'},[
     el('img',{src:window.__BRASAO__,alt:''}),
@@ -1458,7 +1465,7 @@ function renderTV(app){
     sl.addEventListener('input', function(){
       var v = Math.min(150, Math.max(50, +sl.value|0));
       var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920));
-      raizTV.style.fontSize = (16*fator*v/100).toFixed(2)+'px';  // preview instantâneo
+      raizTV.style.fontSize = (16*fator*v/100*CARD_ESC_TV).toFixed(2)+'px';  // preview instantâneo
       var lbl = raizTV.querySelector('.tv-esc-lbl'); if(lbl) lbl.textContent = v+'%';
     });
     sl.addEventListener('change', function(){ definirEscalaTV(+sl.value); }); // persiste ao soltar
