@@ -352,7 +352,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v18 · 2026-07-30 · Cards −20% no Dashboard Hierárquico (tela e TV) e no painel TV (CARD_ESC_TV, sem tocar em CFG.escala persistido; slider de escala local preservado). Mantém correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v19 · 2026-08-02 · Correção do login de administradores não-raiz (fallback de autenticação direta generalizado, sem depender de ler admins/ antes do login) + módulo Administrador Mestre (login alfanumérico, mesmos privilégios, revogável). Mantém correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -384,6 +384,13 @@ var ULTIMO_ERRO = null;  // último erro real devolvido pelo banco (alimenta a a
 var ANON = false;        // true quando a TV/visão pública entrou como usuário anônimo
 var FILA_BOOT = null;    // gravações pendentes recuperadas do aparelho (preenchida no boot)
 function emailAdmin(rg){ return 'rg'+rg+'@coep1.pmerj.local'; }
+/* Administrador Mestre: login alfanumérico (não-RG), mesmos privilégios do
+   administrador-raiz. Login normalizado (minúsculo, só [a-z0-9]) vira tanto a
+   chave em coep1/admins_mestre/{loginNorm} quanto o e-mail sintético do
+   Authentication — nunca há credencial fixa gravada no código-fonte; a conta
+   real só passa a existir quando alguém com sessão de raiz clica em "Criar". */
+function normalizaLoginMestre(login){ return String(login||'').trim().toLowerCase().replace(/[^a-z0-9]/g,''); }
+function emailMestre(loginNorm){ return 'mestre-'+loginNorm+'@coep1.pmerj.local'; }
 /* Chave pública do app web (Firebase console > Configurações do projeto > Seus apps).
    Não é segredo: o Firebase a expõe no cliente. Sem ela o Authentication não inicia.
    Pode ser injetada em runtime por localStorage: coep1_apikey */
@@ -1041,6 +1048,11 @@ function renderLogin(app){
   var btn = el('button',{cls:'btn btn-ouro',onclick:entrar},['Entrar no painel administrativo']);
   inSenha.addEventListener('keydown', function(e){ if(e.key==='Enter') entrar(); });
   function entrar(){
+    /* Login mestre (RG raiz tem "reset mestre" de emergência — coisa diferente);
+       este é o Administrador Mestre: login alfanumérico, não-RG. Qualquer
+       caractere não-dígito no campo de identificação é tratado como login
+       mestre, nunca como RG. */
+    if(/[^0-9]/.test(inRG.value.trim()) && inRG.value.trim()){ entrarMestre(inRG.value.trim(), inSenha.value); return; }
     var rg = inRG.value.replace(/\D/g,''), senha = inSenha.value;
     if(!rg||!senha){ msg.textContent='Informe RG e senha.'; return; }
     msg.textContent=''; btn.disabled=true; btn.textContent='Verificando…';
@@ -1063,18 +1075,26 @@ function renderLogin(app){
            'primeiro acesso': a conta de login pode já existir no Authentication (criada
            por um reset mestre anterior cuja gravação em admins/ foi recusada pelas regras
            antigas). Tenta autenticar antes de decidir. */
-        if(rg===RAIZ_RG && authOK()){
+        /* CORREÇÃO (achado de auditoria): antes só o RG raiz tentava autenticar
+           direto quando a lista de admins vinha vazia. Mas a leitura de admins/
+           exige auth!=null (regra do banco) — em QUALQUER dispositivo que nunca
+           teve sessão Firebase antes, essa leitura falha para TODO mundo antes do
+           login (não só quando o banco está de fato vazio), e o app confundia
+           "não consegui ler" com "não existe admin", bloqueando administradores
+           reais (conta e registro existem) que só não tinham cache local nesse
+           aparelho. Agora qualquer RG tenta autenticar direto; só decide
+           "primeiro acesso"/"não cadastrado" se a autenticação em si falhar. */
+        if(authOK()){
           AUTH.signInWithEmailAndPassword(emailAdmin(rg), senha).then(function(cred){
-            var novo = {nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:cred.user.uid, ts:Date.now()};
-            ADMINS = {}; ADMINS[rg]=novo; lsSet('admins',ADMINS);
-            gravar('admins/'+rg, novo, 'reconciliação do registro do administrador-raiz');
-            espelhaUID(rg);
-            auditar('reconciliacao_admin','', 'RG '+rg);
-            concluir(novo);
+            reconciliaEEntra(rg, cred.user.uid);
           }).catch(function(e){
             var c = e && e.code || '';
             btn.disabled=false; btn.textContent='Entrar no painel administrativo';
-            if(c==='auth/user-not-found'){ primeiroAcesso(rg, senha); return; }
+            if(c==='auth/user-not-found'){
+              if(rg===RAIZ_RG){ primeiroAcesso(rg, senha); }
+              else msg.textContent='Nenhum administrador cadastrado. O primeiro acesso é do administrador-raiz.';
+              return;
+            }
             if(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'){ falha(); return; }
             erroAuth(e);
           });
@@ -1087,22 +1107,19 @@ function renderLogin(app){
       }
       var a = adm[rg];
       if(!a){
-        /* Registro ausente no banco. Para o RG raiz isto não é 'não existe': a conta de
-           login pode estar no Authentication (criada por um reset mestre anterior) e só a
-           gravação em admins/{rg} ter falhado na época das regras antigas. Tenta autenticar;
-           se a senha bater, reconcilia o banco automaticamente e entra. */
-        if(rg===RAIZ_RG && authOK()){
+        /* Registro ausente no banco (ou lista não pôde ser lida antes do login).
+           Não é exclusivo do RG raiz: qualquer administrador cuja conta exista no
+           Authentication mas cujo registro em admins/{rg} tenha sumido/nunca sido
+           lido a tempo tenta autenticar direto; se a senha bater, reconcilia o
+           banco automaticamente (lendo admins/{rg} de novo, já autenticado) e entra. */
+        if(authOK()){
           var mailR = emailAdmin(rg);
           AUTH.signInWithEmailAndPassword(mailR, senha).then(function(cred){
-            var novo = {nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:cred.user.uid, ts:Date.now()};
-            ADMINS = ADMINS||{}; ADMINS[rg]=novo; lsSet('admins',ADMINS);
-            gravar('admins/'+rg, novo, 'reconciliação do registro do administrador-raiz');
-            espelhaUID(rg);
-            auditar('reconciliacao_admin','', 'RG '+rg);
-            concluir(novo);
+            reconciliaEEntra(rg, cred.user.uid);
           }).catch(function(e){
             var c = e && e.code || '';
-            if(c==='auth/user-not-found'){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; primeiroAcesso(rg, senha); return; }
+            btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+            if(c==='auth/user-not-found'){ if(rg===RAIZ_RG){ primeiroAcesso(rg, senha); return; } falha(); return; }
             if(c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'){ falha(); return; }
             erroAuth(e);
           });
@@ -1164,6 +1181,24 @@ function renderLogin(app){
       lsSet('sess',SESS); auditar('login','','');
       irPara('admin');
     }
+    /* Reconcilia admins/{rg} depois de uma autenticação bem-sucedida (nesse ponto
+       auth!=null, então a leitura já funciona) e conclui o login. Não assume mais
+       "é o raiz" — usa os dados reais do banco quando existem, e só cai num
+       registro padrão (RG comum, nível 'adm') quando o registro realmente não
+       existe, preservando o caso especial do RG raiz. */
+    function reconciliaEEntra(rg, uid){
+      var padrao = (rg===RAIZ_RG) ? {nome:'2º SGT PM GUMIERO', nivel:'raiz'} : {nome:'RG '+rg, nivel:'adm'};
+      function aplicar(dadosBanco){
+        var novo = Object.assign({}, padrao, dadosBanco||{}, {uid:uid, ts:Date.now()});
+        ADMINS = ADMINS||{}; ADMINS[rg]=novo; lsSet('admins',ADMINS);
+        gravar('admins/'+rg, novo, 'reconciliação do registro do administrador RG '+rg);
+        espelhaUID(rg);
+        auditar('reconciliacao_admin','', 'RG '+rg);
+        concluir(novo);
+      }
+      if(DB){ DB.ref(NS+'/admins/'+rg).once('value').then(function(s){ aplicar(s.val()); }).catch(function(){ aplicar(null); }); }
+      else aplicar(null);
+    }
     function falha(){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; msg.textContent='RG ou senha inválidos.'; }
     function erroAuth(e){
       btn.disabled=false; btn.textContent='Entrar no painel administrativo';
@@ -1180,6 +1215,38 @@ function renderLogin(app){
   }
   /* Compartilhada por primeiroAcesso() e resetMestre(): grava o admin-raiz no banco
      (sempre sobrescrevendo qualquer registro antigo/inconsistente) e já entra logado. */
+  /* Login do Administrador Mestre — login alfanumérico (não-RG), mesmos
+     privilégios de qualquer administrador. Ver bloco ADMINISTRADOR MESTRE. */
+  function entrarMestre(loginBruto, senha){
+    if(!senha){ msg.textContent='Informe a senha.'; return; }
+    if(!authOK()){ msg.textContent=motivoAuth(); return; }
+    msg.textContent=''; btn.disabled=true; btn.textContent='Verificando…';
+    var loginNorm = normalizaLoginMestre(loginBruto);
+    var mail = emailMestre(loginNorm);
+    AUTH.signInWithEmailAndPassword(mail, senha).then(function(cred){
+      if(!DB){ btn.disabled=false; btn.textContent='Entrar no painel administrativo'; msg.textContent='Sem conexão com o banco.'; return; }
+      DB.ref(NS+'/admins_mestre/'+loginNorm).once('value').then(function(s){
+        var m = s.val();
+        btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+        if(!m || m.status!=='ativo'){
+          AUTH.signOut();
+          msg.textContent = m ? 'Esta credencial mestre está revogada/inativa.' : 'Credencial mestre não reconhecida.';
+          return;
+        }
+        SESS = {rg:'mestre:'+loginNorm, nome:'Administrador Mestre ('+(m.login||loginNorm)+')', nivel:'mestre', exp:Date.now()+12*3600e3};
+        lsSet('sess',SESS);
+        auditar('login_mestre','',loginNorm);
+        irPara('admin');
+      }).catch(function(){
+        btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+        msg.textContent='Falha ao verificar status da credencial mestre.';
+      });
+    }).catch(function(e){
+      btn.disabled=false; btn.textContent='Entrar no painel administrativo';
+      var c = e && e.code || '';
+      msg.textContent = (c==='auth/wrong-password'||c==='auth/invalid-credential'||c==='auth/invalid-login-credentials'||c==='auth/user-not-found') ? 'Login ou senha inválidos.' : ('Falha na autenticação'+(c?' ('+c+')':'')+'.');
+    });
+  }
   function assumirRaiz(rg, uid, acao){
     ADMINS = {}; ADMINS[rg]={nome:'2º SGT PM GUMIERO', nivel:'raiz', uid:uid, ts:Date.now()};
     lsSet('admins',ADMINS);
@@ -1609,7 +1676,7 @@ function renderAdmin(app){
       el('div',{},[el('div',{cls:'t1',text:'COE P1 Funcional'}),el('div',{cls:'t2',text:'Painel administrativo'})]),
       el('div',{cls:'adm-busca'},[busca]),
       el('span',{cls:'pino'+(ONLINE?' on':''),id:'pino'},[el('i'),el('span',{text:ONLINE?'Banco conectado':'Sem conexão'})]),
-      el('div',{cls:'adm-user'},[SESS.nome,el('small',{text:'RG '+SESS.rg+' · '+(SESS.nivel==='raiz'?'Administrador-raiz':'Administrador')})]),
+      el('div',{cls:'adm-user'},[SESS.nome,el('small',{text:(SESS.nivel==='mestre'?'Administrador Mestre':(('RG '+SESS.rg)+' · '+(SESS.nivel==='raiz'?'Administrador-raiz':'Administrador')))})]),
       el('button',{cls:'btn btn-borda btn-min',title:'Busca uma cópia nova do app direto do servidor, ignorando o cache do navegador',onclick:function(){ confirmar('Buscar a versão mais recente do app agora? A tela vai recarregar.',forcarAtualizacao); }},['🔄 Forçar Atualização']),
       el('button',{cls:'btn btn-ouro btn-min',onclick:function(){ auditar('logout','',''); if(AUTH) AUTH.signOut(); SESS=null; lsDel('sess'); irPara('login'); }},['Sair'])
     ]),
@@ -3199,6 +3266,7 @@ function vAdmins(main){
     });
     box.appendChild(t);
     box.appendChild(el('p',{style:'font-size:.7rem;color:#4a5262;margin-top:.7em',text:'O administrador-raiz (RG '+RAIZ_RG+') não pode ser removido nem rebaixado. Administradores nomeados podem nomear novos administradores. Senhas são gerenciadas pelo Firebase Authentication e nunca ficam gravadas neste banco de dados. Sem e-mail de recuperação cadastrado, um admin que esquecer a senha só pode ser restaurado manualmente no Firebase Console.'}));
+    if(SESS.nivel==='raiz') renderMestres(main);
   });
   function novoAdmin(){
     var iRG=el('input',{inputmode:'numeric',placeholder:'RG'}), iNome=el('input',{placeholder:'Nome de guerra / posto'}), iS=el('input',{type:'password',placeholder:'Senha inicial'});
@@ -3311,6 +3379,122 @@ function vAdmins(main){
       }}
     ]);
   }
+}
+
+/* ============================================================
+   ADMINISTRADOR MESTRE
+   Módulo exclusivo do painel do administrador-raiz. Credencial de
+   login alfanumérico (não-RG) com os MESMOS privilégios de escrita
+   de qualquer administrador comum (espelhamento em admins_uid, o
+   mesmo mecanismo já usado por todo mundo) — pensada para acesso
+   extraordinário sem mexer em código-fonte nem fazer novo deploy.
+   Nenhuma credencial fixa vive no HTML: a conta real só passa a
+   existir quando o administrador-raiz clica em "Criar" já logado.
+   LIMITAÇÃO REAL do Firebase Authentication (client SDK, sem Admin
+   SDK/Cloud Functions): ninguém troca a senha nem o e-mail de OUTRA
+   conta pelo navegador — só a própria conta pode. Por isso "editar
+   login/senha" aqui sempre REVOGA a credencial atual e cria uma nova
+   (documentado na própria tela, nunca escondido); e "excluir" remove
+   o acesso e o registro deste app na hora, mas a conta em si só some
+   da lista do Authentication manualmente no Firebase Console.
+   ============================================================ */
+function carregaMestres(){
+  if(!DB) return Promise.resolve({});
+  return DB.ref(NS+'/admins_mestre').once('value').then(function(s){ return s.val()||{}; }).catch(function(){ return {}; });
+}
+function renderMestres(main){
+  var box = el('div',{cls:'painel',style:'margin-top:1.2em'});
+  box.appendChild(el('div',{cls:'adm-h1',style:'font-size:.95rem'},['🔐 Administrador Mestre',
+    el('button',{cls:'btn btn-azul btn-min',onclick:function(){ formMestre(); }},['+ Nova credencial mestre'])]));
+  var corpo = el('div',{text:'Carregando…'});
+  box.appendChild(corpo);
+  main.appendChild(box);
+  carregaMestres().then(function(mestres){
+    corpo.innerHTML='';
+    var chaves = Object.keys(mestres);
+    if(!chaves.length){ corpo.appendChild(el('p',{style:'font-size:.75rem;color:#4a5262',text:'Nenhuma credencial mestre criada ainda.'})); return; }
+    var t = el('table',{cls:'tb'},[el('thead',{},[el('tr',{},[
+      el('th',{text:'Login'}),el('th',{text:'Status'}),el('th',{text:'Criada em'}),el('th',{text:'Atualizada em'}),el('th',{text:''})
+    ])])]);
+    var c = el('tbody'); t.appendChild(c);
+    chaves.forEach(function(k){
+      var m = mestres[k];
+      c.appendChild(el('tr',{},[
+        el('td',{cls:'mono',text:m.login||k}),
+        el('td',{},[el('span',{cls:'tag '+(m.status==='ativo'?'tag-ok':'tag-alerta'),text:m.status==='ativo'?'Ativo':'Revogado/Inativo'})]),
+        el('td',{text:m.criadoEm?new Date(m.criadoEm).toLocaleString('pt-BR'):'—'}),
+        el('td',{text:m.atualizadoEm?new Date(m.atualizadoEm).toLocaleString('pt-BR'):'—'}),
+        el('td',{},[
+          el('button',{cls:'btn btn-borda btn-min',onclick:function(){ alternarStatusMestre(k, m); }},[m.status==='ativo'?'Revogar/Desativar':'Reativar']),
+          el('button',{cls:'btn btn-borda btn-min',onclick:function(){ formMestre(k, m); }},['Redefinir senha']),
+          el('button',{cls:'btn btn-erro btn-min',onclick:function(){ excluirAdminMestre(k, m); }},['Excluir'])
+        ])
+      ]));
+    });
+    corpo.appendChild(t);
+    corpo.appendChild(el('p',{style:'font-size:.68rem;color:#4a5262;margin-top:.6em',text:'Enquanto "Revogado/Inativo", o acesso é bloqueado mesmo com a senha certa. "Redefinir" revoga a credencial atual e cria uma nova (limitação do Firebase Authentication: ninguém troca a senha de outra conta pelo navegador). "Excluir" remove o acesso e o registro deste app; a conta em si some da lista de usuários do Authentication somente pelo Firebase Console.'}));
+  });
+}
+function formMestre(loginAtualNorm, mAtual){
+  var editando = !!loginAtualNorm;
+  var iLogin = el('input',{placeholder:'Login (ex.: SPAEI)', value: editando?(mAtual.login||''):''});
+  if(editando) iLogin.disabled = true;
+  var iSenha = el('input',{type:'password',placeholder:editando?'Nova senha (mín. 6)':'Senha inicial (mín. 6)'});
+  modal(editando?'Redefinir credencial mestre':'Nova credencial mestre', el('div',{cls:'form-gr'},[
+    el('div',{cls:'campo'},[el('label',{text:'Login'}),iLogin]),
+    el('div',{cls:'campo largo'},[el('label',{text:editando?'Nova senha':'Senha inicial'}),iSenha]),
+    editando?el('p',{cls:'nota-info',text:'Isto REVOGA a credencial atual deste login e cria uma nova conta com a senha informada.'}):null
+  ]),[
+    {rotulo:'Cancelar'},
+    {rotulo:editando?'Revogar e recriar':'Criar', cls:'btn-azul', acao:function(f){
+      var loginNorm = normalizaLoginMestre(iLogin.value);
+      if(!loginNorm){ toast('Informe um login.','erro'); return; }
+      if(iSenha.value.length<6){ toast('Use ao menos 6 caracteres.','erro'); return; }
+      if(!DB||!authOK()){ toast('Sem conexão com o banco/autenticação.','erro'); return; }
+      var mail = emailMestre(loginNorm);
+      var sec = firebase.initializeApp(firebase.app().options, 'sec_mestre_'+Date.now());
+      sec.auth().createUserWithEmailAndPassword(mail, iSenha.value).then(function(cred){
+        return cred.user.uid;
+      }).catch(function(e){
+        if(e && e.code==='auth/email-already-in-use'){
+          return sec.auth().signInWithEmailAndPassword(mail, iSenha.value).then(function(cred2){ return cred2.user.uid; });
+        }
+        throw e;
+      }).then(function(uid){
+        return sec.auth().signOut().then(function(){ return sec.delete(); }).then(function(){ return uid; });
+      }).then(function(uid){
+        var registro = {login: iLogin.value.trim()||loginNorm, uid: uid, status:'ativo', criadoEm:(editando&&mAtual.criadoEm)||Date.now(), atualizadoEm:Date.now(), criadoPor:SESS.rg};
+        gravar('admins_mestre/'+loginNorm, registro, (editando?'redefinição':'criação')+' de credencial mestre '+loginNorm);
+        DB.ref(NS+'/admins_uid/'+uid).set({rg:'mestre:'+loginNorm, ts:Date.now(), criadoPor:SESS.rg, mestre:true}).catch(function(){});
+        auditar(editando?'mestre_redefinir':'mestre_criar', loginNorm, '');
+        toast('Credencial mestre '+(editando?'redefinida':'criada')+'.','ok');
+        f(); renderRota();
+      }).catch(function(e){
+        toast('Falha: '+(e.message||e.code),'erro'); sec.delete().catch(function(){});
+      });
+    }}
+  ]);
+}
+function alternarStatusMestre(loginNorm, m){
+  var vaiAtivar = m.status!=='ativo';
+  confirmar((vaiAtivar?'Reativar':'Revogar/desativar')+' o acesso mestre "'+(m.login||loginNorm)+'"?', function(){
+    var registro = Object.assign({}, m, {status: vaiAtivar?'ativo':'inativo', atualizadoEm:Date.now()});
+    gravar('admins_mestre/'+loginNorm, registro, (vaiAtivar?'reativação':'revogação')+' de credencial mestre '+loginNorm);
+    if(vaiAtivar && m.uid) DB.ref(NS+'/admins_uid/'+m.uid).set({rg:'mestre:'+loginNorm, ts:Date.now(), mestre:true}).catch(function(){});
+    else if(!vaiAtivar && m.uid) DB.ref(NS+'/admins_uid/'+m.uid).remove().catch(function(){});
+    auditar(vaiAtivar?'mestre_reativar':'mestre_revogar', loginNorm, '');
+    toast(vaiAtivar?'Credencial reativada.':'Acesso revogado imediatamente.','ok');
+    renderRota();
+  });
+}
+function excluirAdminMestre(loginNorm, m){
+  confirmar('Excluir PERMANENTEMENTE o registro da credencial mestre "'+(m.login||loginNorm)+'" deste app? A conta continuará existindo no Firebase Authentication até ser removida manualmente no Console (Authentication → Users).', function(){
+    gravar('admins_mestre/'+loginNorm, null, 'exclusão de credencial mestre '+loginNorm);
+    if(m.uid) DB.ref(NS+'/admins_uid/'+m.uid).remove().catch(function(){});
+    auditar('mestre_excluir', loginNorm, '');
+    toast('Registro excluído. Acesso já bloqueado.','ok');
+    renderRota();
+  });
 }
 
 /* ============================================================
