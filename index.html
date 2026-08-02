@@ -352,7 +352,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v19 · 2026-08-02 · Correção do login de administradores não-raiz (fallback de autenticação direta generalizado, sem depender de ler admins/ antes do login) + módulo Administrador Mestre (login alfanumérico, mesmos privilégios, revogável). Mantém correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v20 · 2026-08-02 · Importação de fichas do policial (aba Efetivo → 📥 Importar fichas): lê os JSON gerados pela ficha do PM, mostra prévia de conferência por RG e grava pelo caminho seguro (merge não-destrutivo). Mantém v19 (login não-raiz + Administrador Mestre) e correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -2257,7 +2257,10 @@ function definirDestaque(chaveMes){
 function vEfetivo(main){
   var f = VIEW.filtro;
   main.appendChild(el('div',{cls:'adm-h1'},['Efetivo',
-    el('button',{cls:'btn btn-azul',onclick:novoMilitar},['+ Novo militar'])]));
+    el('div',{style:'display:flex;gap:.5em;flex-wrap:wrap'},[
+      el('button',{cls:'btn btn-borda',onclick:importarFichas},['📥 Importar fichas']),
+      el('button',{cls:'btn btn-azul',onclick:novoMilitar},['+ Novo militar'])
+    ])]));
   var selSec = el('select',{onchange:function(e){ f.sec=e.target.value; renderRota(); }},[el('option',{value:'',text:'Todas as seções'})]);
   ordemSecoes().forEach(function(s){ selSec.appendChild(el('option',{value:s,text:nomeSecao(s),selected:f.sec===s?'':null})); });
   var selPosto = el('select',{onchange:function(e){ f.posto=e.target.value; renderRota(); }},[el('option',{value:'',text:'Todos os postos'})]);
@@ -2318,8 +2321,145 @@ function novoMilitar(){
 }
 
 /* ============================================================
-   FICHA DO POLICIAL (abas)
+   IMPORTAÇÃO DE FICHAS (JSON gerado pelo policial)
+   Fluxo seguro: lê os arquivos FICHA-RG*.json, casa cada um pelo RG,
+   mostra uma PRÉVIA de conferência campo a campo (o que muda), e só
+   grava o que o admin aprovar — usando o MESMO caminho de gravação da
+   edição manual (salvarConjunto/salvarFicha → gravar() com read-back,
+   permissão, auditoria e a trava institucional de chefias). Nunca
+   escreve fora do app. Campo em branco na ficha NUNCA apaga o que já
+   existe no card (merge não-destrutivo).
    ============================================================ */
+var IMPORT_FILA = [];   // fichas lidas, aguardando conferência
+function importarFichas(){
+  var inp = el('input',{type:'file',accept:'.json,application/json',multiple:true,style:'display:none'});
+  inp.addEventListener('change', function(e){
+    var arqs = Array.prototype.slice.call(e.target.files||[]);
+    if(!arqs.length) return;
+    var lidos = [], erros = [];
+    var pend = arqs.length;
+    arqs.forEach(function(arq){
+      var fr = new FileReader();
+      fr.onload = function(){
+        try{
+          var d = JSON.parse(fr.result);
+          if(d && d._tipo==='ficha_coe' && d.rg){ lidos.push(d); }
+          else erros.push(arq.name+': não é uma ficha COE válida.');
+        }catch(err){ erros.push(arq.name+': arquivo ilegível.'); }
+        if(--pend===0) revisarImport(lidos, erros);
+      };
+      fr.onerror = function(){ erros.push(arq.name+': falha ao ler.'); if(--pend===0) revisarImport(lidos, erros); };
+      fr.readAsText(arq);
+    });
+  });
+  document.body.appendChild(inp); inp.click();
+  setTimeout(function(){ inp.remove(); }, 100);
+}
+/* diferença campo a campo entre a ficha recebida e o que o card já tem */
+function difFicha(d){
+  var rg = String(d.rg).replace(/\D/g,'');
+  var m = militar(rg);
+  var mudancas = [];   // {rotulo, de, para, aplicar()}
+  function add(rotulo, de, para){ if((para||'')!=='' && String(de||'')!==String(para||'')) mudancas.push({rotulo:rotulo, de:de||'—', para:para}); }
+  var b = d.base||{};
+  add('Nome', m&&m.nome, b.nome);
+  add('Posto', m&&m.posto, b.posto);
+  add('Seção', m&&m.reparticao, b.reparticao);
+  add('Função', m&&m.funcao, b.funcao);
+  add('Situação', m&&m.situacao, b.situacao);
+  var id=d.ident||{}, fi=(m&&fichaGet(m,'ident'))||{};
+  add('CPF', fi.cpf, id.cpf); add('Nascimento', fi.nasc, id.nasc); add('Nome do pai', fi.pai, id.pai); add('Nome da mãe', fi.mae, id.mae);
+  add('Nome de guerra', fi.guerra, b.guerra);
+  var fu=d.func||{}, ff=(m&&fichaGet(m,'func'))||{};
+  add('Matrícula', ff.matricula, fu.matricula); add('Inclusão', ff.inclusao, fu.inclusao);
+  var h=d.hab||{}, hm=(m&&m.habilitacao)||{};
+  add('CNH nº', hm.numero, h.numero); add('CNH categoria', hm.categoria, h.categoria); add('CNH validade', hm.validade, h.validade);
+  if((d.cursos||[]).length) add('Cursos', ((m&&m.cursos)||[]).length+' curso(s)', (d.cursos||[]).length+' curso(s)');
+  if((d.dep||[]).length) add('Dependentes', (((m&&fichaGet(m,'dep'))||[]).length)+' dep.', (d.dep||[]).length+' dep.');
+  var co=d.cont||{}, cf=(m&&fichaGet(m,'cont'))||{};
+  if(co.tel||co.email||co.end) add('Endereço/contatos', (cf.tel||cf.email||cf.end)?'(preenchido)':'—', '(atualizar)');
+  return {rg:rg, existe:!!m, nome:(m&&m.nome)||b.nome||'(sem card)', mudancas:mudancas, dados:d};
+}
+function revisarImport(lidos, erros){
+  if(!lidos.length){ toast(erros.length?('Nenhuma ficha válida. '+erros[0]):'Nenhum arquivo selecionado.','erro'); return; }
+  var difs = lidos.map(difFicha);
+  var selec = {}; difs.forEach(function(x){ selec[x.rg]=true; });
+  var corpo = el('div');
+  corpo.appendChild(el('p',{cls:'nota-info',text:'Confira o que cada ficha vai alterar. Só o que você marcar será gravado. Campo em branco na ficha nunca apaga o que já existe.'}));
+  if(erros.length) corpo.appendChild(el('div',{cls:'nota-restr',style:'margin-bottom:.6em',text:'Ignorados: '+erros.join(' · ')}));
+  difs.forEach(function(x){
+    var head = el('label',{style:'display:flex;align-items:center;gap:.6em;font-weight:700;cursor:pointer;margin:.3em 0'});
+    var chk = el('input',{type:'checkbox'}); chk.checked=true;
+    chk.addEventListener('change', function(){ selec[x.rg]=chk.checked; });
+    head.appendChild(chk);
+    head.appendChild(el('span',{text:'RG '+x.rg+' · '+x.nome+(x.existe?'':' (novo card)')}));
+    corpo.appendChild(head);
+    if(!x.mudancas.length){ corpo.appendChild(el('p',{style:'font-size:.78rem;color:#4a5262;margin:0 0 .8em 1.8em',text:'Sem alterações (dados já iguais).'})); selec[x.rg]=false; chk.checked=false; return; }
+    var t = el('table',{cls:'tb',style:'margin:0 0 1em 1.8em;width:calc(100% - 1.8em)'});
+    t.appendChild(el('thead',{},[el('tr',{},[el('th',{text:'Campo'}),el('th',{text:'Antes'}),el('th',{text:'Depois'})])]));
+    var tb=el('tbody');
+    x.mudancas.forEach(function(mu){ tb.appendChild(el('tr',{},[
+      el('td',{text:mu.rotulo}),
+      el('td',{style:'color:#8a2b2b',text:String(mu.de)}),
+      el('td',{style:'color:#1f7a3d;font-weight:600',text:String(mu.para)})
+    ])); });
+    t.appendChild(tb); corpo.appendChild(t);
+  });
+  modal('Importar fichas — conferência', corpo, [
+    {rotulo:'Cancelar'},
+    {rotulo:'Gravar selecionadas', cls:'btn-azul', acao:function(f){
+      var alvo = difs.filter(function(x){ return selec[x.rg] && x.mudancas.length; });
+      if(!alvo.length){ toast('Nada selecionado para gravar.','erro'); return; }
+      aplicarImport(alvo);
+      f();
+    }}
+  ]);
+}
+/* aplica cada ficha aprovada pelo caminho seguro do app (merge não-destrutivo) */
+function aplicarImport(alvo){
+  var total=alvo.length, feitos=0, falhas=0;
+  alvo.reduce(function(p, x){
+    return p.then(function(){
+      var d = x.dados, rg = x.rg;
+      // Relê o estado ATUAL do militar direto do banco antes de mesclar — nunca
+      // confia só no OVR em memória (pode estar desatualizado). Assim o merge
+      // parte sempre do que o card realmente tem, e campo em branco na ficha
+      // jamais apaga um dado já existente.
+      var lerAtual = (DB ? DB.ref(NS+'/mil/'+rg).once('value').then(function(s){ return s.val(); }).catch(function(){ return OVR[rg]||null; })
+                         : Promise.resolve(OVR[rg]||null));
+      return lerAtual.then(function(atual){
+        var base = atual ? JSON.parse(JSON.stringify(atual)) : (militar(rg) ? {rg:rg} : {rg:rg, situacao:'ATIVO', adido:false, aptidoes:[], cursos:[]});
+        base.rg = rg;
+        if(!base.ficha) base.ficha = {};
+        var b = d.base||{};
+        ['nome','posto','reparticao','funcao','situacao'].forEach(function(k){ if(b[k]) base[k]=(k==='nome'?String(b[k]).toUpperCase():b[k]); });
+        if(d.hab && (d.hab.numero||d.hab.categoria||d.hab.validade)){
+          base.habilitacao = Object.assign({}, base.habilitacao||{}, limpaVazios(d.hab));
+        }
+        if((d.cursos||[]).length) base.cursos = d.cursos.map(function(c){ return {nome:c.nome, validade:c.validade||''}; });
+        // abas (merge não-destrutivo por aba, direto no objeto relido)
+        base.ficha.ident = Object.assign({}, base.ficha.ident||{}, limpaVazios(Object.assign({guerra:b.guerra||''}, d.ident)));
+        base.ficha.func  = Object.assign({}, base.ficha.func||{},  limpaVazios(d.func||{}));
+        if(d.hab && d.hab.primeira) base.ficha.hab = Object.assign({}, base.ficha.hab||{}, {primeira:d.hab.primeira});
+        if((d.cursos||[]).length) base.ficha.cursos = d.cursos;
+        if((d.dep||[]).length) base.ficha.dep = d.dep;
+        base.ficha.cont = Object.assign({}, base.ficha.cont||{}, limpaVazios(d.cont||{}));
+        OVR[rg] = base;
+        auditar('import_ficha', rg, 'ficha do policial importada');
+        return gravar('mil/'+rg, base, 'importação da ficha de '+rg).then(function(ok){
+          if(ok) feitos++; else falhas++;
+        });
+      });
+    });
+  }, Promise.resolve()).then(function(){
+    renderRota();
+    if(falhas) persistWarn(falhas+' ficha(s) de '+total+' não puderam ser gravadas no banco — veja os avisos de gravação.', null, 'import_falha');
+    toast(feitos+' ficha(s) importada(s)'+(falhas?(' · '+falhas+' com falha'):'')+'.', falhas?'erro':'ok');
+  });
+}
+function limpaVazios(o){ var r={}; for(var k in o){ if(o[k]!=='' && o[k]!=null) r[k]=o[k]; } return r; }
+
+
 var ABAS_FICHA = [
   {id:'ident', rot:'Identificação'},
   {id:'func', rot:'Dados funcionais'},
