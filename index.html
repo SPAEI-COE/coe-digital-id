@@ -352,7 +352,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v20 · 2026-08-02 · Importação de fichas do policial (aba Efetivo → 📥 Importar fichas): lê os JSON gerados pela ficha do PM, mostra prévia de conferência por RG e grava pelo caminho seguro (merge não-destrutivo). Mantém v19 (login não-raiz + Administrador Mestre) e correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v21 · 2026-08-04 · Correção crítica: TV/QR público (e 1º login de qualquer admin no aparelho) podiam ficar com foto/dados sem sincronizar para sempre — listeners de mil/fotos/cfg/destaques só anexam depois de autenticação confirmada, com aviso e religamento automático se cair. Mantém v20 (importação de fichas), v19 (login não-raiz + Administrador Mestre) e correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -942,30 +942,66 @@ function initFirebase(){
           jaTentouAnon = true;
           AUTH.signInAnonymously().catch(function(e){
             ULTIMO_ERRO = {quando:Date.now(), bruto:'anônimo: '+((e&&(e.code||e.message))||e)};
+            iniciarListenersDados();   // mesma limitação de hoje se o anônimo estiver desabilitado no console
           });
+        } else if(u){
+          iniciarListenersDados();
+        } else {
+          listenersDadosAtivos = false;   // deslogou (ou nunca logou): próximo login real reanexa do zero
         }
         renderRota();
       });
-      setTimeout(function(){ if(!AUTH_PRONTO){ AUTH_PRONTO = true; renderRota(); } }, 8000);
+      setTimeout(function(){ if(!AUTH_PRONTO){ AUTH_PRONTO = true; iniciarListenersDados(); renderRota(); } }, 8000);
+    } else {
+      iniciarListenersDados();   // sem Authentication disponível: nada a esperar, mantém o comportamento de sempre
     }
     DB.ref('.info/connected').on('value', function(s){
       ONLINE = !!s.val();
       if(ONLINE && FILA.length) setTimeout(escoaFila, 800);   // voltou a rede: reenvia o que ficou pendente
       var p=$('#pino'); if(p){ p.classList.toggle('on', ONLINE); p.lastChild.textContent = ONLINE?'Banco conectado':'Sem conexão'; }
     });
-    DB.ref(NS+'/mil').on('value', function(s){
-      var srv = s.val()||{};
-      for(var c in PEND){ if(c.indexOf('mil/')===0) srv[c.slice(4)] = PEND[c]; }   // pendência local vence o eco
-      OVR = srv; espelhoLocal(); agendarRepaint();
-    });
-    DB.ref(NS+'/fotos').on('value', function(s){
-      var srv = s.val()||{};
-      for(var c in PEND){ if(c.indexOf('fotos/')===0) srv[c.slice(6)] = PEND[c]; }
-      FOTOS = srv; agendarRepaint();
-    });
-    DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:50,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[],catalogos:{especialidades:null,cursos:[]}}, v); if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]}; espelhoLocal(); agendarRepaint(); } });
-    DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; agendarRepaint(); });
   }catch(e){ DB=null; ONLINE=false; }
+}
+/* CLASSE CORRIGIDA (auditoria 04/08): os quatro listeners abaixo liam nós que
+   exigem auth!=null (database.rules.json: "coep1".read). Antes eles eram
+   anexados de forma SÍNCRONA, no mesmo instante em que initFirebase() rodava —
+   sempre ANTES do primeiro retorno do onAuthStateChanged e, no caso de TV/QR
+   público, muito antes do signInAnonymously() (round-trip de rede) terminar.
+   Um .on('value') que recebe permission_denied é removido PARA SEMPRE pelo SDK
+   (SyncTree remove o registro do evento) — não há retentativa automática
+   quando a autenticação chega depois. Resultado: em qualquer sessão nova
+   (celular que nunca abriu o app, primeiro boot da TV, primeiro login de um
+   admin no aparelho) os nós mil/fotos/cfg/destaques ficavam mudos para
+   sempre, sem aviso nenhum — FOTOS ficava {} e o card do QR/TV aparecia sem
+   foto (ficha/posto continuavam corretos só porque têm um retrato via SEED
+   embutido no HTML; fotos não têm fallback). Correção: só anexar estes
+   listeners depois que existir um usuário autenticado de verdade (anônimo ou
+   admin), e reanexar sempre que isso se tornar verdade de novo (login após
+   logout, sem precisar recarregar a página). */
+var listenersDadosAtivos = false;
+function iniciarListenersDados(){
+  if(listenersDadosAtivos || !DB) return;
+  listenersDadosAtivos = true;
+  function falha(nome){
+    return function(e){
+      listenersDadosAtivos = false;
+      ULTIMO_ERRO = {quando:Date.now(), bruto:'listener '+nome+': '+((e&&(e.code||e.message))||e)};
+      // desenhaAviso() já suprime a tarja em TV/pub (sem operador) — reaproveita a regra existente
+      persistWarn('Sincronização de dados interrompida — reabra o painel para reconectar.', function(){ location.reload(); }, '__listeners__');
+    };
+  }
+  DB.ref(NS+'/mil').on('value', function(s){
+    var srv = s.val()||{};
+    for(var c in PEND){ if(c.indexOf('mil/')===0) srv[c.slice(4)] = PEND[c]; }   // pendência local vence o eco
+    OVR = srv; espelhoLocal(); agendarRepaint();
+  }, falha('mil'));
+  DB.ref(NS+'/fotos').on('value', function(s){
+    var srv = s.val()||{};
+    for(var c in PEND){ if(c.indexOf('fotos/')===0) srv[c.slice(6)] = PEND[c]; }
+    FOTOS = srv; agendarRepaint();
+  }, falha('fotos'));
+  DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:50,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[],catalogos:{especialidades:null,cursos:[]}}, v); if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]}; espelhoLocal(); agendarRepaint(); } }, falha('cfg'));
+  DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; agendarRepaint(); }, falha('destaques'));
 }
 /* As regras de segurança do RTDB só sabem consultar POR CHAVE — não dá para
    perguntar "existe algum admin cujo uid seja X". Por isso o uid do
