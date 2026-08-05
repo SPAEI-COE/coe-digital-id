@@ -291,6 +291,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier-comando{display:flex;flex-direction:column;align-items:center;gap:.5em;padding:.5em 0 1em}
 .hier-cargo{display:flex;flex-direction:column;align-items:center;gap:.4em;width:min(15em,80%)}
 .hier-cargo-rot{font-family:var(--display);font-weight:600;font-size:.72em;letter-spacing:.14em;color:var(--azul-700);text-transform:uppercase}
+.hier-subs{display:flex;flex-wrap:wrap;gap:1.4em;justify-content:center}
 .hier-seta{font-size:1.4em;color:var(--ouro);line-height:.6}
 .hier-secoes{display:flex;flex-direction:column;gap:1.4em}
 .hier-secao{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1em 1.1em 1.2em}
@@ -352,7 +353,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v24 · 2026-08-05 · Melhoria 02: catálogo de Cargos/Funções gerível pelo admin (aba Categorias) — reaproveita a mesma infraestrutura de Especialidades/Cursos (catAdicionar/catRenomear/catExcluir/catContagem generalizados via catLista()); semeado transparentemente a partir dos valores de Função já em uso pelos 142 militares (nenhum dado existente quebra); renomear propaga pro campo Função de cada militar; campo Função na ficha virou combo (texto + sugestões do catálogo, nunca bloqueia valor livre); Função/Cargo também disponível como filtro no Gerador de Relatórios. Mantém v23 (Login Mestre + cards do admin -20%), v22 (rota #/tv-hier), v21 (rota tv), v20 (importação de fichas), v19 (login não-raiz + Administrador Mestre).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v25 · 2026-08-05 · Subcomandante deixou de ser automático por posto (2º maior da corporação) e virou CARGO atribuído pelo admin via ficha do militar — reconhece qualquer função que comece com "Subcomandante" (Operacional, Administrativo, ou variante nova que o admin criar), exige oficial, mostra 0/1/vários lado a lado na faixa de comando do Hierárquico, nunca mais um genérico "de fábrica". Cargos "Subcomandante Operacional" e "Subcomandante Administrativo" garantidos no catálogo desde já. Mantém v24 (catálogo de Cargos/Funções), v23 (bug Login Mestre + cards do admin -20%), v22 (rota #/tv-hier) e v21 (rota tv).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -428,6 +429,10 @@ function catCursos(){
 function cargosSeed(){
   var s={};
   efetivo().forEach(function(m){ var f=normCat(m.funcao); if(f) s[f]=true; });
+  /* Garantidos (05/08, pedido do usuário): sempre disponíveis como opção,
+     mesmo antes de qualquer militar ser atribuído a eles — sem isso o combo
+     não tinha como oferecer um cargo que ninguém ainda usa. */
+  ['Subcomandante Operacional','Subcomandante Administrativo'].forEach(function(g){ s[g]=true; });
   return Object.keys(s).sort();
 }
 function catCargos(){
@@ -1919,11 +1924,21 @@ function vDash(main){
    código de dados/ordenação é duplicado. Máx. 6 cards por linha.
    ============================================================ */
 function topoInstitucional(){
-  /* Comandante e Subcomandante = os dois militares de maior posto do efetivo
-     geral (a ordem de posto já é a verdade hierárquica do app). Se o efetivo
-     tiver menos de 2, devolve o que houver — nunca quebra. */
+  /* Comandante = maior posto do efetivo geral (auto, como sempre foi).
+     Subcomandante DEIXOU de ser automático por posto (05/08, pedido do
+     usuário, caso Ten Cel Marcelo Vaz): virou um CARGO que o admin atribui
+     pela ficha do militar (catálogo de Cargos/Funções — ex. "Subcomandante
+     Operacional", "Subcomandante Administrativo", ou qualquer variante nova
+     que o admin criar). Reconhece qualquer funcao que COMECE com
+     "subcomandante" (case-insensitive), então "Subcomandante X" futuro
+     funciona sem tocar em código de novo. Exige oficial (mesma regra de
+     chefia da app: praça nunca ocupa posto de comando) — protege contra
+     erro de digitação no campo livre. Se ninguém tiver o cargo atribuído,
+     a faixa de comando mostra só o Comandante — nunca mais um subcomandante
+     "de fábrica". */
   var ger = efetivo().slice().sort(cmpPosto);
-  return { cmt: ger[0]||null, subcmt: ger[1]||null };
+  var subs = ger.filter(function(m){ return ehOficial(m) && /^subcomandante/i.test(normCat(m.funcao)); });
+  return { cmt: ger[0]||null, subs: subs };
 }
 function montaHierarquia(opts){
   opts = opts||{};
@@ -1934,14 +1949,18 @@ function montaHierarquia(opts){
   if(topo.cmt){
     faixa.appendChild(el('div',{cls:'hier-cargo'},[el('div',{cls:'hier-cargo-rot',text:'COMANDANTE'}), cardPM(topo.cmt, opts.cardOpts||{})]));
   }
-  if(topo.subcmt){
+  if(topo.subs && topo.subs.length){
     faixa.appendChild(el('div',{cls:'hier-seta',text:'↓'}));
-    faixa.appendChild(el('div',{cls:'hier-cargo'},[el('div',{cls:'hier-cargo-rot',text:'SUBCOMANDANTE'}), cardPM(topo.subcmt, opts.cardOpts||{})]));
+    var faixaSubs = el('div',{cls:'hier-subs'});
+    topo.subs.forEach(function(m){
+      faixaSubs.appendChild(el('div',{cls:'hier-cargo'},[el('div',{cls:'hier-cargo-rot',text:(m.funcao||'SUBCOMANDANTE').toUpperCase()}), cardPM(m, opts.cardOpts||{})]));
+    });
+    faixa.appendChild(faixaSubs);
   }
   wrap.appendChild(faixa);
   // Seções: cada uma com chefe (maior posto) separado dos demais, máx 6/linha.
-  // O comando institucional (cmt/subcmt) não se repete nas seções.
-  var jaNoTopo = {}; if(topo.cmt) jaNoTopo[topo.cmt.rg]=1; if(topo.subcmt) jaNoTopo[topo.subcmt.rg]=1;
+  // O comando institucional (cmt/subs) não se repete nas seções.
+  var jaNoTopo = {}; if(topo.cmt) jaNoTopo[topo.cmt.rg]=1; (topo.subs||[]).forEach(function(m){ jaNoTopo[m.rg]=1; });
   var secs = ordemSecoes().filter(function(s){ return (CFG.ocultas||[]).indexOf(s)<0 && membrosSecao(s).length; });
   var grid = el('div',{cls:'hier-secoes'});
   secs.forEach(function(s){
