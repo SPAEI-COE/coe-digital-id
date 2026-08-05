@@ -334,7 +334,7 @@ window.__SEED__ = [{"rg": "60919", "nome": "ALEX BENEVENUTO SANTOS", "posto": "C
 var SEED = window.__SEED__ || [];
 var OVR = {};            // overrides/extensões por RG (espelha coep1/mil)
 var FOTOS = {};          // dataURL por RG (espelha coep1/fotos)
-var CFG = { escala: 50, modoTV: 'grade', tempoPag: 12, ordem: null, pastas: {}, ocultas: [], catalogos: { especialidades: null, cursos: [] } };
+var CFG = { escala: 50, modoTV: 'grade', tempoPag: 12, ordem: null, pastas: {}, ocultas: [], catalogos: { especialidades: null, cursos: [], cargos: null } };
 /* Coeficiente de renderização dos cards do painel TV: reduz o card em ~20% de
    fábrica SEM tocar em CFG.escala (que é persistido no banco e definido pelo
    admin). Aplicado só no fontSize da raiz .tv na hora de renderizar; o slider
@@ -352,7 +352,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v23 · 2026-08-05 · Correção crítica: criação/redefinição/revogação/exclusão de credencial mestre eram disparo-e-esquece (sem aguardar confirmação do banco, erro de permissão de uid engolido em silêncio) — admin via "criada" mesmo quando a gravação não tinha sido confirmada, causando falha de login relatada depois. Agora aguarda gravar()+espelho de uid e avisa explicitamente se algo não confirmar. Melhoria: cards do admin (Efetivo/listas/relatórios) reduzidos 20% (mesmo coeficiente já usado na TV). Mantém v22 (rota #/tv-hier), v21 (rota tv), v20 (importação de fichas), v19 (login não-raiz + Administrador Mestre) e correção de persistência v17.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v24 · 2026-08-05 · Melhoria 02: catálogo de Cargos/Funções gerível pelo admin (aba Categorias) — reaproveita a mesma infraestrutura de Especialidades/Cursos (catAdicionar/catRenomear/catExcluir/catContagem generalizados via catLista()); semeado transparentemente a partir dos valores de Função já em uso pelos 142 militares (nenhum dado existente quebra); renomear propaga pro campo Função de cada militar; campo Função na ficha virou combo (texto + sugestões do catálogo, nunca bloqueia valor livre); Função/Cargo também disponível como filtro no Gerador de Relatórios. Mantém v23 (Login Mestre + cards do admin -20%), v22 (rota #/tv-hier), v21 (rota tv), v20 (importação de fichas), v19 (login não-raiz + Administrador Mestre).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -420,6 +420,26 @@ function catEspecialidades(){
 function catCursos(){
   return (CFG.catalogos && Array.isArray(CFG.catalogos.cursos)) ? CFG.catalogos.cursos : [];
 }
+/* Cargos (Melhoria 02, 05/08): mesmo padrão de migração transparente do
+   catEspecialidades — catalogos.cargos===null na primeira vez -> semeia a
+   partir dos valores de `funcao` JÁ em uso pelos 142 militares reais (nunca
+   parte de lista vazia, senão o combo ficaria sem sugestão nenhuma pro que já
+   existe). Depois da 1ª gravação vira lista própria, editável pelo admin. */
+function cargosSeed(){
+  var s={};
+  efetivo().forEach(function(m){ var f=normCat(m.funcao); if(f) s[f]=true; });
+  return Object.keys(s).sort();
+}
+function catCargos(){
+  if(CFG.catalogos && Array.isArray(CFG.catalogos.cargos)) return CFG.catalogos.cargos;
+  return cargosSeed();
+}
+function catLista(tipo){
+  if(tipo==='especialidades') return catEspecialidades();
+  if(tipo==='cursos') return catCursos();
+  if(tipo==='cargos') return catCargos();
+  return [];
+}
 function normCat(s){ return (s||'').trim().replace(/\s+/g,' '); }
 function achaCat(lista, nome){
   var alvo = normCat(nome).toLowerCase();
@@ -428,17 +448,17 @@ function achaCat(lista, nome){
 }
 function catAdicionar(tipo, nome, descr){
   nome = normCat(nome); if(!nome) return false;
-  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  var atual = catLista(tipo).slice();
   if(achaCat(atual, nome)>=0) return false;
   atual.push(nome);
-  if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]};
+  if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[],cargos:null};
   CFG.catalogos = Object.assign({}, CFG.catalogos); CFG.catalogos[tipo]=atual;
   gravar('cfg', CFG, descr || ('novo item em catálogo de '+tipo+': '+nome));
   return true;
 }
 function catRenomear(tipo, de, para){
   de=normCat(de); para=normCat(para); if(!para) return false;
-  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  var atual = catLista(tipo).slice();
   var i = achaCat(atual, de); if(i<0) return false;
   if(achaCat(atual, para)>=0 && para.toLowerCase()!==de.toLowerCase()){ toast('Já existe um item com esse nome.','erro'); return false; }
   atual[i]=para;
@@ -450,6 +470,10 @@ function catRenomear(tipo, de, para){
       var esp = (m.ficha.func||{}).especialidades||[];
       var j = esp.indexOf(de);
       if(j>=0){ var novo = esp.slice(); novo[j]=para; var o=Object.assign({},m.ficha.func||{}); o.especialidades=novo; salvarFicha(m.rg,'func',o); }
+    });
+  } else if(tipo==='cargos'){
+    efetivo().forEach(function(m){
+      if(normCat(m.funcao).toLowerCase()===de.toLowerCase()) salvarBase(m.rg, {funcao: para});
     });
   } else {
     efetivo().forEach(function(m){
@@ -463,7 +487,7 @@ function catRenomear(tipo, de, para){
 }
 function catExcluir(tipo, nome){
   nome=normCat(nome);
-  var atual = (tipo==='especialidades' ? catEspecialidades() : catCursos()).slice();
+  var atual = catLista(tipo).slice();
   var i = achaCat(atual, nome); if(i<0) return false;
   atual.splice(i,1);
   CFG.catalogos = Object.assign({}, CFG.catalogos); CFG.catalogos[tipo]=atual;
@@ -473,6 +497,7 @@ function catExcluir(tipo, nome){
 function catContagem(tipo, nome){
   var tudo = efetivo();
   if(tipo==='especialidades') return tudo.filter(function(m){ return ((m.ficha.func||{}).especialidades||[]).indexOf(nome)>=0; }).length;
+  if(tipo==='cargos') return tudo.filter(function(m){ return normCat(m.funcao).toLowerCase()===nome.toLowerCase(); }).length;
   return tudo.filter(function(m){ return (fichaGet(m,'cursos')||[]).some(function(r){ return normCat(r.curso).toLowerCase()===nome.toLowerCase(); }); }).length;
 }
 var NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1010,7 +1035,7 @@ function iniciarListenersDados(){
     for(var c in PEND){ if(c.indexOf('fotos/')===0) srv[c.slice(6)] = PEND[c]; }
     FOTOS = srv; agendarRepaint();
   }, falha('fotos'));
-  DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:50,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[],catalogos:{especialidades:null,cursos:[]}}, v); if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[]}; espelhoLocal(); agendarRepaint(); } }, falha('cfg'));
+  DB.ref(NS+'/cfg').on('value', function(s){ var v=s.val(); if(v && !PEND['cfg']){ CFG = Object.assign({escala:50,modoTV:'grade',tempoPag:12,ordem:null,pastas:{},ocultas:[],catalogos:{especialidades:null,cursos:[],cargos:null}}, v); if(!CFG.catalogos) CFG.catalogos={especialidades:null,cursos:[],cargos:null}; espelhoLocal(); agendarRepaint(); } }, falha('cfg'));
   DB.ref(NS+'/destaques').on('value', function(s){ DESTAQUES = s.val()||{}; agendarRepaint(); }, falha('destaques'));
 }
 /* As regras de segurança do RTDB só sabem consultar POR CHAVE — não dá para
@@ -2004,6 +2029,7 @@ function CAMPOS_RELATORIO(){
     {id:'situacao', rot:'Situação', ops:function(){var s={};efetivo().forEach(function(m){s[m.situacao||'ATIVO']=true;});return Object.keys(s).sort();}, leitor:function(m){return m.situacao||'ATIVO';}},
     {id:'posto', rot:'Posto/Graduação', ops:function(){return POSTOS;}, leitor:function(m){return m.posto||'';}},
     {id:'reparticao', rot:'Seção', ops:function(){return ordemSecoes().filter(function(s){return s[0]!=='@';});}, leitor:function(m){return m.reparticao||'';}},
+    {id:'funcao', rot:'Função/Cargo', ops:catCargos, leitor:function(m){return m.funcao||'';}},
     {id:'adido', rot:'Adido', ops:function(){return ['Sim','Não'];}, leitor:function(m){return m.adido?'Sim':'Não';}},
     {id:'tipoSanguineo', rot:'Tipo sanguíneo', ops:function(){return TIPOS_SANGUINEOS;}, leitor:function(m){return (m.ficha.saude||{}).tipoSanguineo||'';}},
     {id:'habilitacao', rot:'Habilitação (categoria)', ops:function(){var c={};efetivo().forEach(function(m){var h=(m.habilitacao||{}).categoria;if(h)c[h]=true;});return Object.keys(c).sort();}, leitor:function(m){return (m.habilitacao||{}).categoria||'';}},
@@ -2119,16 +2145,16 @@ function vGerador(main){
 /* ---- Categorias (especialidades e cursos geríveis pelo ADM) ---- */
 function vCategorias(main){
   main.appendChild(el('div',{cls:'adm-h1'},['Categorias']));
-  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Especialidades técnicas e cursos usados nas fichas e nos relatórios. Renomear aqui atualiza automaticamente todos os militares que possuem o item; excluir remove só o item do catálogo (com confirmação se estiver em uso).'}));
+  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Cargos/funções, especialidades técnicas e cursos usados nas fichas e nos relatórios. Renomear aqui atualiza automaticamente todos os militares que possuem o item; excluir remove só o item do catálogo (com confirmação se estiver em uso).'}));
 
   function painelCatalogo(titulo, tipo){
     var pn = el('div',{cls:'painel'});
     pn.appendChild(el('h3',{text:titulo}));
-    var lista = tipo==='especialidades' ? catEspecialidades() : catCursos();
+    var lista = catLista(tipo);
     var box = el('div',{cls:'lista-reg'});
     function repinta(){
       box.innerHTML='';
-      var atual = tipo==='especialidades' ? catEspecialidades() : catCursos();
+      var atual = catLista(tipo);
       if(!atual.length){ box.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262',text:'Nenhum item cadastrado ainda.'})); }
       atual.forEach(function(nome){
         var n = catContagem(tipo, nome);
@@ -2159,6 +2185,7 @@ function vCategorias(main){
     main.appendChild(pn);
   }
 
+  painelCatalogo('Cargos / Funções', 'cargos');
   painelCatalogo('Especialidades técnicas', 'especialidades');
   painelCatalogo('Cursos', 'cursos');
 }
@@ -2897,7 +2924,7 @@ function abaIdent(area, m, md){
     {id:'nome',rot:'Nome completo',largo:true},
     {id:'posto',rot:'Posto/Graduação',tipo:'select',ops:POSTOS},
     {id:'reparticao',rot:'Seção',tipo:'select',ops:ordemSecoes().filter(function(s){return s[0]!=='@';})},
-    {id:'funcao',rot:'Função'},
+    {id:'funcao',rot:'Função',tipo:'combo',ops:catCargos()},
     {id:'situacao',rot:'Situação',tipo:'select',ops:['ATIVO','FÉRIAS','LICENÇA','LTS','CURSO','MISSÃO','DISPENSA','AGREGADO']},
     {id:'adido',rot:'Adido',tipo:'check'}
   ],{nome:m.nome,posto:m.posto,reparticao:m.reparticao,funcao:m.funcao,situacao:m.situacao,adido:m.adido});
