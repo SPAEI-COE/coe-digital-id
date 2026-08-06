@@ -298,7 +298,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier-secao{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1em 1.1em 1.2em}
 .hier-secao-tit{font-family:var(--display);font-weight:600;font-size:1em;color:var(--azul-800);text-transform:uppercase;letter-spacing:.1em;padding-bottom:.5em;margin-bottom:.7em;border-bottom:2px solid var(--ouro-claro);display:flex;align-items:baseline;gap:.6em}
 .hier-secao-tit small{font-family:var(--mono);font-size:.6em;color:var(--grafite-700);letter-spacing:0}
-.hier-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(7.6em,1fr));gap:.85em}
+.hier-cards{display:grid;grid-template-columns:repeat(auto-fill,7.6em);gap:.85em}
 .hier-cards .card-pm{font-size:12.8px}
 .hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:max(12em,150px)}
 .hier-chefe-rot{font-family:var(--display);font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--ouro);text-transform:uppercase}
@@ -307,7 +307,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier--tv .hier-secao-tit{color:var(--ouro-claro)}
 .hier--tv .hier-secao-tit small{color:var(--prata-300)}
 .hier--tv .hier-cargo-rot{color:var(--prata-300)}
-.hier--tv .hier-cards{grid-template-columns:repeat(auto-fit,minmax(6.8em,1fr))}
+.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,6.8em)}
 .hier--tv .hier-cards .card-pm{font-size:.8em}
 .pastas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.9em}
 .pasta-card{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1.1em .9em;text-align:center;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
@@ -355,7 +355,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v28 · 2026-08-06 · UNIFICAÇÃO (pedido do usuário, com evidência em print): #/tv e #/tv-hier agora são a MESMA função (renderTVHier removida, era duplicada) — Hierárquico + rolagem automática virou o padrão de fábrica de QUALQUER TV nova, sem precisar clicar em nada; grade/pastas continuam acessíveis pelos botões, só deixaram de ser o padrão. BUG REAL corrigido: faixa de Comandante/Subcomandante (.hier-cargo) e o card do chefe de seção (.hier-chefe-wrap) tinham largura só em unidade em, que colapsava junto com um contexto de fonte pequeno (ex. janela do navegador estreita) — agora com piso mínimo em px, nunca mais fica minúsculo. Config. TV (seletor grade/pastas) continua existindo mas deixou de definir o padrão da TV. Mantém v27 (auto-fill→auto-fit em #/tv-hier), v26 (modo créditos), v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v29 · 2026-08-06 · CORREÇÃO DE REGRESSÃO (auditoria com v25 como baseline, evidência em diff objetivo): cards do Dashboard Hierárquico/TV cresciam quando a seção tinha poucos militares — causa: a troca auto-fill→auto-fit da v27 (que corrigiu o bug antigo de cards espremidos à esquerda) tem efeito colateral com minmax(X,1fr): colunas vazias colapsam e o 1fr concentra nos poucos cards que sobram, fazendo-os esticar. Corrigido na raiz: coluna de tamanho FIXO (sem 1fr/minmax) — nem espreme (bug antigo) nem estica (regressão v27) mais, tamanho do card é 100% definido por regra CSS estática, imune à quantidade de militares na seção. Confirmado com dados reais do seed: seção de 1 PM (CMT), 2 (AJD), 6 (RUMB) e 32 (DEMOLIÇÃO) usam a mesma regra, zero JS calcula tamanho por contagem. .grade-adm (lista do admin) e .tv-grade (grade normal da TV) não foram tocados — não fazem parte desta regressão. Mantém v28 (unificação #/tv=#/tv-hier), v27, v26 (modo créditos), v25 (Subcomandante por cargo).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
