@@ -290,7 +290,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .diag-pre{background:#0e1526;color:#cfe0ff;padding:1em;border-radius:var(--r-sm);font-family:var(--mono),ui-monospace,monospace;font-size:.72rem;line-height:1.5;overflow:auto;max-height:60vh;white-space:pre-wrap;word-break:break-word}
 .hier{display:flex;flex-direction:column;gap:1.6em}
 .hier-comando{display:flex;flex-direction:column;align-items:center;gap:.5em;padding:.5em 0 1em}
-.hier-cargo{display:flex;flex-direction:column;align-items:center;gap:.4em;width:min(15em,80%)}
+.hier-cargo{display:flex;flex-direction:column;align-items:center;gap:.4em;width:min(max(15em,190px),80%)}
 .hier-cargo-rot{font-family:var(--display);font-weight:600;font-size:.72em;letter-spacing:.14em;color:var(--azul-700);text-transform:uppercase}
 .hier-subs{display:flex;flex-wrap:wrap;gap:1.4em;justify-content:center}
 .hier-seta{font-size:1.4em;color:var(--ouro);line-height:.6}
@@ -300,7 +300,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier-secao-tit small{font-family:var(--mono);font-size:.6em;color:var(--grafite-700);letter-spacing:0}
 .hier-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(7.6em,1fr));gap:.85em}
 .hier-cards .card-pm{font-size:12.8px}
-.hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:12em}
+.hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:max(12em,150px)}
 .hier-chefe-rot{font-family:var(--display);font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--ouro);text-transform:uppercase}
 .hier-linha-ouro{height:2px;background:linear-gradient(90deg,var(--ouro-claro),var(--ouro),transparent);margin:.9em 0;opacity:.7}
 .hier--tv .hier-secao{background:linear-gradient(158deg,rgba(251,252,254,.10),rgba(225,230,239,.05));border-color:rgba(207,212,220,.25)}
@@ -355,7 +355,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v27 · 2026-08-06 · CORREÇÃO: Modo créditos agora usa a MESMA estrutura do Dashboard Hierárquico (montaHierarquia — Comandante→Subcomandante→Seções), toca sozinho assim que selecionado, só pausa se o admin pedir; velocidade-base aumentada (perceptível já no 1º segundo). BUG REAL corrigido em #/tv-hier E no modo créditos: grid usava auto-fill (reservava colunas vazias quando a seção tem poucos militares numa tela larga — cards existentes ficavam pequenos e empurrados à esquerda); trocado para auto-fit. Tamanho do card na TV Hierárquica agora acompanha a escala real da TV (antes travado em 12.8px fixo). Mantém v26 (modo créditos), v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções), v23 (Login Mestre + cards do admin -20%).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v28 · 2026-08-06 · UNIFICAÇÃO (pedido do usuário, com evidência em print): #/tv e #/tv-hier agora são a MESMA função (renderTVHier removida, era duplicada) — Hierárquico + rolagem automática virou o padrão de fábrica de QUALQUER TV nova, sem precisar clicar em nada; grade/pastas continuam acessíveis pelos botões, só deixaram de ser o padrão. BUG REAL corrigido: faixa de Comandante/Subcomandante (.hier-cargo) e o card do chefe de seção (.hier-chefe-wrap) tinham largura só em unidade em, que colapsava junto com um contexto de fonte pequeno (ex. janela do navegador estreita) — agora com piso mínimo em px, nunca mais fica minúsculo. Config. TV (seletor grade/pastas) continua existindo mas deixou de definir o padrão da TV. Mantém v27 (auto-fill→auto-fit em #/tv-hier), v26 (modo créditos), v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -1081,7 +1081,7 @@ function renderRota(){
   var r = rota(), app = $('#app');
   if(!app) return;
   if(/^v\//.test(r)){ VIEW.rota='pub'; desenhaAviso(); renderPublico(app, r.slice(2)); return; }
-  if(/^tv-hier([/?#].*)?$/i.test(r)){ VIEW.rota='tv'; desenhaAviso(); renderTVHier(app); return; }
+  if(/^tv-hier([/?#].*)?$/i.test(r)){ VIEW.rota='tv'; desenhaAviso(); VIEW.tvModoLocal='creditos'; lsSet('tvModoLocal','creditos'); renderTV(app); return; }
   if(/^tv([/?#].*)?$/i.test(r)){ VIEW.rota='tv'; desenhaAviso(); renderTV(app); return; }
   if(r==='admin'){
     var v = sessValida();
@@ -1495,40 +1495,6 @@ function cardPM(m, opts){
    ============================================================ */
 var TV_TIMERS = [];
 function pararTV(){ TV_TIMERS.forEach(clearInterval); TV_TIMERS=[]; VIEW.tvTimer=null; }
-/* Painel TV do Dashboard Hierárquico (SRS §10) — mesmo chrome/escala da TV
-   principal, corpo rolável, sem timer. Reutiliza montaHierarquia(). */
-function renderTVHier(app){
-  pararTV(); lsSet('tvMode', true); app.innerHTML='';
-  if(VIEW.tvEscalaLocal===null){ var _eL=lsGet('tvEscalaLocal'); if(_eL!=null) VIEW.tvEscalaLocal=_eL; }
-  var esc100 = Math.min(150, Math.max(50, VIEW.tvEscalaLocal!=null ? VIEW.tvEscalaLocal : (+CFG.escala||100)));
-  var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920));
-  var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100*CARD_ESC_TV).toFixed(2)+'px'});
-  var relog = el('div',{cls:'s2'});
-  raiz.appendChild(el('div',{cls:'tv-topo'},[
-    el('img',{src:window.__BRASAO__,alt:''}),
-    el('div',{},[
-      el('div',{cls:'t1',text:'Comando de Operações Especiais'}),
-      el('div',{cls:'t2',text:'Estrutura Hierárquica · COE P1 Funcional'})
-    ]),
-    el('div',{cls:'tv-sec'},[el('div',{cls:'s1',text:'Cadeia de comando'}), relog]),
-    el('span',{cls:'pino'+(ONLINE?' on':''),id:'pino',style:'margin-left:1.2em'},[el('i'),el('span',{text:ONLINE?'Banco conectado':'Sem conexão'})])
-  ]));
-  raiz.appendChild(el('div',{cls:'faixa-ouro'}));
-  var corpo = el('div',{cls:'tv-corpo tv-corpo--rolavel'});
-  corpo.appendChild(montaHierarquia({tv:true}));
-  raiz.appendChild(corpo);
-  function ajustar(delta){ var atual=Math.min(150,Math.max(50,VIEW.tvEscalaLocal!=null?VIEW.tvEscalaLocal:(+CFG.escala||100))); VIEW.tvEscalaLocal=Math.min(150,Math.max(50,atual+delta)); lsSet('tvEscalaLocal',VIEW.tvEscalaLocal); renderTVHier(app); }
-  var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[
-    el('button',{cls:'tv-voltar',onclick:function(){ irPara('tv'); }},['▦ Ver grade do efetivo']),
-    el('button',{cls:'tv-voltar',title:'Diminuir — só deste televisor',onclick:function(){ ajustar(-10); }},['A−']),
-    el('button',{cls:'tv-voltar',title:'Aumentar — só deste televisor',onclick:function(){ ajustar(10); }},['A+']),
-    el('span',{text:'Escala '+esc100+'%'+(VIEW.tvEscalaLocal!=null?' (ajuste deste televisor)':'')+' · role para ver mais'})
-  ]);
-  raiz.appendChild(rod);
-  app.appendChild(raiz);
-  function tick(){ var d=new Date(); relog.textContent=d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'})+' · '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
-  tick(); TV_TIMERS.push(setInterval(tick, 30000));
-}
 function renderTV(app){
   pararTV();
   lsSet('tvMode', true);
@@ -1577,7 +1543,17 @@ function renderTV(app){
     gradeFS = 16;                         // a fonte do card escala junto com a grade via em
     return { gap: Math.max(12, .85*fs), fsGrade: 16 };
   }
-  function modoAtual(){ return VIEW.tvModoLocal || CFG.modoTV; }
+  function modoAtual(){
+    /* Padrão de fábrica de QUALQUER TV nova passou a ser 'creditos' (05/08,
+       pedido do usuário: "a visualização deles [painel TV e #/tv-hier] tem
+       que ser idêntica... ao dashboard hierárquico. E que se movimente.").
+       Antes caía em CFG.modoTV (grade/pastas, configurado pelo admin) — era
+       exatamente a divergência relatada. O seletor "Modo de apresentação" em
+       Config. TV continua existindo e gravando CFG.modoTV, mas deixou de ser
+       lido aqui como padrão — só o ajuste LOCAL (grade/pastas/créditos pelos
+       botões do próprio televisor) manda a partir de agora. */
+    return VIEW.tvModoLocal || 'creditos';
+  }
   function alternarModoTV(){
     /* Ajuste só deste televisor — NUNCA grava no Firebase. A TV entra como
        sessão anônima (sem privilégio de administrador); uma escrita em
