@@ -104,6 +104,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .tv-topo .tv-sec .s1{font-family:var(--display);font-weight:600;font-size:1.25em;color:var(--ouro-claro);text-transform:uppercase;letter-spacing:.06em;line-height:1}
 .tv-topo .tv-sec .s2{font-family:var(--mono);font-size:.62em;color:var(--prata-300);margin-top:.35em}
 .tv-corpo{flex:1;padding:1.1em 1.4em 1.4em;overflow:hidden;position:relative}
+.tv-corpo--creditos{font-size:.8em}
 .tv-grade{display:grid;gap:1em;align-content:start}
 .tv-grade .card-pm:hover{transform:none;box-shadow:var(--sombra-1)}
 .tv-secao-titulo{grid-column:1/-1;font-family:var(--display);font-weight:600;font-size:1em;color:var(--ouro-claro);text-transform:uppercase;letter-spacing:.12em;padding:.35em 0 .05em;border-bottom:1px solid rgba(200,170,0,.35);display:flex;align-items:baseline;gap:.6em}
@@ -353,7 +354,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v25 · 2026-08-05 · Subcomandante deixou de ser automático por posto (2º maior da corporação) e virou CARGO atribuído pelo admin via ficha do militar — reconhece qualquer função que comece com "Subcomandante" (Operacional, Administrativo, ou variante nova que o admin criar), exige oficial, mostra 0/1/vários lado a lado na faixa de comando do Hierárquico, nunca mais um genérico "de fábrica". Cargos "Subcomandante Operacional" e "Subcomandante Administrativo" garantidos no catálogo desde já. Mantém v24 (catálogo de Cargos/Funções), v23 (bug Login Mestre + cards do admin -20%), v22 (rota #/tv-hier) e v21 (rota tv).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v26 · 2026-08-05 · Novo modo TV "🎬 Modo créditos": cards 20% menores que o padrão da TV, rolagem automática contínua (créditos de filme), com pausar/retomar e velocidade ajustáveis — só ajuste local deste televisor (localStorage, nunca grava no Firebase, mesma regra dos demais controles da TV). Reaproveita 100% a montagem de cards já existente (montaGradeSecao); nenhuma outra tela do app foi tocada. Mantém v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções), v23 (Login Mestre + cards do admin -20%), v22 (rota #/tv-hier).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -406,7 +407,7 @@ function motivoAuth(){
 }
 var ONLINE = false;
 var VIEW = { rota: '', abaAdm: 'dash', filtro: { q: '', sec: '', posto: '', sit: '' }, fichaRG: null, fichaAba: 'ident', tvPag: 0, tvSec: 0, tvTimer: null, tvPasta: null, penFoto: false,
-  tvEscalaLocal: null, tvModoLocal: null, tvDensLocal: null, pastaSel: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
+  tvEscalaLocal: null, tvModoLocal: null, tvDensLocal: null, tvCreditosPausado: null, tvCreditosVel: null, pastaSel: null };  // ajuste que vale só para este televisor (localStorage, nunca vai ao Firebase)
 var POSTOS = ["Cel PM","Ten Cel PM","Maj PM","Cap PM","1º Ten PM","2º Ten PM","Asp Of PM","Sub Ten PM","1º Sgt PM","2º Sgt PM","3º Sgt PM","Cb PM","Sd PM"];
 var ESPECIALIDADES_PADRAO = ['Blindados','Máquinas Pesadas','Demolição/EOD','Mergulho (GMAR)','Rapel/Alta Montanha','Atirador de Precisão','Pilotagem de Drone','Cond. Viaturas Especiais','Telemática/TI','Instrutor'];
 var TIPOS_SANGUINEOS = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
@@ -1533,6 +1534,8 @@ function renderTV(app){
   app.innerHTML='';
   if(VIEW.tvEscalaLocal===null){ var _eL=lsGet('tvEscalaLocal'); if(_eL!=null) VIEW.tvEscalaLocal=_eL; }
   if(VIEW.tvModoLocal===null){ var _mL=lsGet('tvModoLocal'); if(_mL) VIEW.tvModoLocal=_mL; }
+  if(VIEW.tvCreditosPausado===null){ var _cP=lsGet('tvCreditosPausado'); VIEW.tvCreditosPausado = (_cP===true); }
+  if(VIEW.tvCreditosVel===null){ var _cV=lsGet('tvCreditosVel'); if(_cV!=null) VIEW.tvCreditosVel=_cV; }
   var esc100 = Math.min(150, Math.max(50, VIEW.tvEscalaLocal!=null ? VIEW.tvEscalaLocal : (+CFG.escala||100)));
   var fator = Math.min(2.6, Math.max(.55, window.innerWidth/1920)); // 1080p=1×, 4K=2×
   var raiz = el('div',{cls:'tv',style:'font-size:'+(16*fator*esc100/100*CARD_ESC_TV).toFixed(2)+'px'});
@@ -1617,6 +1620,42 @@ function renderTV(app){
   function botaoModoTV(){
     return el('button',{cls:'tv-voltar',onclick:alternarModoTV},[modoAtual()==='pastas' ? '▦ Ver em grade' : '📁 Ver por pastas']);
   }
+  /* Modo Créditos (05/08, pedido do usuário): rolagem automática tipo "créditos
+     de filme", cards 20% menores que o padrão da TV. Botão PRÓPRIO, separado do
+     alternarModoTV — não reaproveita o ciclo grade/pastas para não mudar o
+     comportamento de quem já usa aquele botão. Só ajuste deste televisor
+     (localStorage): pausa/velocidade nunca tentam gravar no Firebase, porque a
+     TV é sessão anônima sem permissão de escrita (mesma razão de alternarModoTV
+     acima) — gravar aqui enfileiraria pra sempre e prenderia aviso vermelho
+     sobre o telão, sem ninguém ali pra resolver. */
+  function alternarModoCreditos(){
+    VIEW.tvModoLocal = modoAtual()==='creditos' ? 'grade' : 'creditos';
+    lsSet('tvModoLocal', VIEW.tvModoLocal);
+    VIEW.tvPasta=null;
+    desenharFluxo();
+  }
+  function botaoModoCreditos(){
+    return el('button',{cls:'tv-voltar',onclick:alternarModoCreditos},[modoAtual()==='creditos' ? '▦ Sair dos créditos' : '🎬 Modo créditos']);
+  }
+  function creditosVelAtual(){ return Math.min(3, Math.max(.3, VIEW.tvCreditosVel!=null ? VIEW.tvCreditosVel : 1)); }
+  function ajustarVelCreditos(mult){
+    VIEW.tvCreditosVel = Math.min(3, Math.max(.3, +(creditosVelAtual()*mult).toFixed(2)));
+    lsSet('tvCreditosVel', VIEW.tvCreditosVel);
+    var lbl = raiz.querySelector('.tv-cred-vel'); if(lbl) lbl.textContent = Math.round(creditosVelAtual()*100)+'%';
+  }
+  function alternarPausaCreditos(){
+    VIEW.tvCreditosPausado = !VIEW.tvCreditosPausado;
+    lsSet('tvCreditosPausado', VIEW.tvCreditosPausado);
+    var bt = raiz.querySelector('.tv-cred-pausa'); if(bt) bt.textContent = VIEW.tvCreditosPausado ? '▶ Retomar' : '⏸ Pausar';
+  }
+  function botoesCreditos(){
+    return [
+      el('button',{cls:'tv-voltar tv-cred-pausa',title:'Pausar/retomar a rolagem — vale só para este televisor',onclick:alternarPausaCreditos},[VIEW.tvCreditosPausado ? '▶ Retomar' : '⏸ Pausar']),
+      el('button',{cls:'tv-voltar',title:'Rolagem mais lenta — vale só para este televisor',onclick:function(){ ajustarVelCreditos(1/1.25); }},['🐢 Mais lento']),
+      el('button',{cls:'tv-voltar',title:'Rolagem mais rápida — vale só para este televisor',onclick:function(){ ajustarVelCreditos(1.25); }},['🐇 Mais rápido']),
+      el('span',{cls:'tv-cred-vel',text:Math.round(creditosVelAtual()*100)+'%'})
+    ];
+  }
   function botoesZoomTV(){
     return [
       el('button',{cls:'tv-voltar',title:'Diminuir o tamanho — vale só para este televisor',onclick:function(){ ajustarEscalaTV(-10); }},['A−']),
@@ -1678,22 +1717,31 @@ function renderTV(app){
   function desenharFluxo(){
     if(modoAtual()==='pastas' && !VIEW.tvPasta){ tilesPastas(); return; }
     corpo.innerHTML='';
+    corpo.classList.toggle('tv-corpo--creditos', modoAtual()==='creditos');
     var md = medidas();
     var fluxo = el('div',{cls:'tv-fluxo'});
     if(modoAtual()==='pastas'){
       secLbl.textContent = nomeSecao(VIEW.tvPasta);
       fluxo.appendChild(montaGradeSecao(VIEW.tvPasta, md));
     } else {
-      secLbl.textContent = 'Efetivo geral';
+      // 'grade' e 'creditos' mostram o mesmo conteúdo (todas as seções) — só
+      // muda o contêiner (tamanho/rolagem automática), reaproveitando 100% da
+      // montagem de cards já existente, sem duplicar lógica de dados.
+      secLbl.textContent = modoAtual()==='creditos' ? 'Efetivo geral · créditos' : 'Efetivo geral';
       secs.forEach(function(s){ fluxo.appendChild(montaGradeSecao(s, md)); });
     }
     corpo.appendChild(fluxo);
     var rodAntigo = raiz.querySelector('.tv-rodape--fixo'); if(rodAntigo) rodAntigo.remove();
-    var rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoTV(),botaoDensTV()].concat(botoesZoomTV()).concat([sliderEscalaTV(), el('span',{cls:'tv-esc-lbl',text:(Math.min(150,Math.max(50,VIEW.tvEscalaLocal!=null?VIEW.tvEscalaLocal:(+CFG.escala||100)))|0)+'%'})]));
-    if(modoAtual()==='pastas'){
-      rod.appendChild(el('button',{cls:'tv-voltar',onclick:function(){ VIEW.tvPasta=null; desenharFluxo(); }},['← Voltar às pastas']));
+    var rod;
+    if(modoAtual()==='creditos'){
+      rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoCreditos()].concat(botoesCreditos()));
+    } else {
+      rod = el('div',{cls:'tv-rodape tv-rodape--fixo'},[botaoModoTV(),botaoModoCreditos(),botaoDensTV()].concat(botoesZoomTV()).concat([sliderEscalaTV(), el('span',{cls:'tv-esc-lbl',text:(Math.min(150,Math.max(50,VIEW.tvEscalaLocal!=null?VIEW.tvEscalaLocal:(+CFG.escala||100)))|0)+'%'})]));
+      if(modoAtual()==='pastas'){
+        rod.appendChild(el('button',{cls:'tv-voltar',onclick:function(){ VIEW.tvPasta=null; desenharFluxo(); }},['← Voltar às pastas']));
+      }
+      rod.appendChild(el('span',{text:'Escala '+esc100+'%'+(VIEW.tvEscalaLocal!=null?' (ajuste deste televisor)':'')+' · role para ver mais'}));
     }
-    rod.appendChild(el('span',{text:'Escala '+esc100+'%'+(VIEW.tvEscalaLocal!=null?' (ajuste deste televisor)':'')+' · role para ver mais'}));
     raiz.appendChild(rod);
   }
   desenharFluxo();
@@ -1707,7 +1755,20 @@ function renderTV(app){
     desenharFluxo();
     corpo.scrollTop = posAntes;
   }, 1000);
-  TV_TIMERS = [relogTimer, vigia];
+  /* Rolagem automática do modo créditos — criada UMA vez aqui (não dentro de
+     desenharFluxo, que roda de novo a cada mudança de dado) para nunca duplicar
+     o intervalo e acelerar sozinho. Não faz nada fora do modo créditos ou
+     pausado. pararTV() (já chamado no topo desta função e em toda troca de
+     rota) limpa este timer automaticamente via TV_TIMERS — nenhum código novo
+     de limpeza foi necessário. */
+  var creditosTimer = setInterval(function(){
+    if(modoAtual()!=='creditos' || VIEW.tvCreditosPausado) return;
+    var max = corpo.scrollHeight - corpo.clientHeight;
+    if(max<=0) return;
+    var novo = corpo.scrollTop + creditosVelAtual();
+    corpo.scrollTop = novo >= max ? 0 : novo;
+  }, 40);
+  TV_TIMERS = [relogTimer, vigia, creditosTimer];
   raiz.addEventListener('click', function(e){
     if(e.target.closest('.tv-voltar') || e.target.closest('.tv-pasta')) return;
     if(document.fullscreenElement) return;
