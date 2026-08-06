@@ -78,8 +78,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .card-pm__topo{background:linear-gradient(140deg,var(--azul-800),var(--azul-700) 52%,var(--azul-600));padding:.55em .7em;display:flex;align-items:center;gap:.5em;position:relative}
 .card-pm__topo:after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--ouro),var(--ouro-claro))}
 .card-pm__brasao{width:1.7em;height:1.7em;flex:0 0 auto;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))}
-.card-pm__posto{font-family:var(--display);font-weight:600;font-size:.92em;color:#fff;text-transform:uppercase;letter-spacing:.02em;line-height:1.05;flex:1;min-width:0}
-.card-pm__chip{font-family:var(--display);font-size:.58em;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--azul-900);background:var(--ouro-claro);padding:.3em .7em;border-radius:3px;white-space:nowrap}
+.card-pm__posto{font-family:var(--display);font-weight:600;font-size:.92em;color:#fff;text-transform:uppercase;letter-spacing:.02em;line-height:1.05;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-pm__chip{font-family:var(--display);font-size:.58em;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--azul-900);background:var(--ouro-claro);padding:.3em .7em;border-radius:3px;white-space:nowrap;flex:0 1 auto;min-width:0;max-width:52%;overflow:hidden;text-overflow:ellipsis}
 .card-pm__foto{aspect-ratio:3/4;background:linear-gradient(160deg,#c9d0dc,#9ea8b9);position:relative;overflow:hidden}
 .card-pm__foto img{width:100%;height:100%;object-fit:cover;object-position:top center}
 .card-pm__foto .sem-foto{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3em;color:#5f6a7d;font-size:.7em;font-weight:600}
@@ -368,7 +368,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v30 · 2026-08-06 · MODO TV = APRESENTAÇÃO INSTITUCIONAL AUTOMÁTICA (contrato de skill do usuário). Ciclo: exibe uma página por vez na ordem hierárquica (Comando → cada seção), avança sozinho e reinicia ao fim, loop infinito; tempo por seção parametrizado (CFG.tempoPag, que existia no banco mas estava ÓRFÃO — nunca era usado por nenhuma lógica) com piso institucional de 10s que a velocidade nunca fura. REGRA GLOBAL DOS CARDS: tamanho oficial virou Single Source of Truth (--card-col/--card-fs, medidos do Dashboard Hierárquico); TV usa max(oficial, escala) — nunca abaixo do oficial, mas ainda cresce em 4K/ultrawide. Removido o -20% da TV (violava o piso). BUG DA SEÇÃO 0 CONFIRMADO E CORRIGIDO: CFG.escala vinha com padrão 50 (metade do tamanho) — agora 100. Dashboard Hierárquico do admin: byte-a-byte inalterado (montaHierarquia só ganhou parâmetro opcional de página). Mantém v29, v28, v27, v26, v25.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v31 · 2026-08-06 · CORREÇÃO (evidência em print): no topo do card, a tag da seção se sobrepunha ao posto quando o nome era longo (caso do chefe do ALMOXARIFADO). Duas frentes: (1) estrutural — posto nunca mais quebra em 2 linhas por baixo da tag (nowrap+reticências) e a tag agora encolhe em vez de estourar o topo; (2) abreviação institucional inteligente (abreviaInst) aplicada à seção e à função, com dicionário montado a partir dos valores REAIS do efetivo — ALMOXARIFADO→ALMOX, APOIO/DIVERSOS→APOIO/DIV, DEMOLIÇÃO→DEMOL, BLINDADOS→BLIND, PROJETOS→PROJ, SEÇÃO→SEÇ, BOLETINISTA→BOLET. Siglas e códigos (P1, RUMB, ALA/D, 3º Sgt PM) ficam intactos; texto completo preservado no title (hover). REGRA DO USUÁRIO RESPEITADA: nome próprio SEMPRE por extenso — validado nos 142 militares, zero nome alterado. Mantém v30 (apresentação automática da TV), v29, v28, v27, v26, v25.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -1472,6 +1472,46 @@ function iconeSemFoto(){
   d.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg><span>SEM FOTO</span>';
   return d;
 }
+/* ============================================================
+   ABREVIAÇÃO INSTITUCIONAL DE RÓTULOS (06/08 — pedido do usuário)
+   Problema real: no topo do card, a tag da seção (ex. ALMOXARIFADO)
+   não cabia ao lado do posto e as duas se sobrepunham; na base, funções
+   longas (ex. CHEFE SEÇÃO PROJETOS) estouravam o espaço.
+   Regra do usuário: NOME PRÓPRIO sempre por extenso — abreviação vale
+   só para seção, função e rótulos institucionais.
+   O dicionário abaixo foi montado a partir dos valores que REALMENTE
+   existem no efetivo (levantados do seed), não de suposição. Termos não
+   listados caem no fallback, que preserva siglas (P1, RUMB, ALA/D, 3º)
+   e só encurta palavra comprida de verdade.
+   ============================================================ */
+var ABREV_INST = {
+  'ALMOXARIFADO':'ALMOX', 'DIVERSOS':'DIV', 'DEMOLIÇÃO':'DEMOL', 'DEMOLICAO':'DEMOL',
+  'BLINDADOS':'BLIND', 'PROJETOS':'PROJ', 'SEÇÃO':'SEÇ', 'SECAO':'SEÇ',
+  'TESOURARIA':'TES', 'TESORARIA':'TES', 'BOLETINISTA':'BOLET', 'CONFERENTE':'CONF',
+  'CONDUTOR':'COND', 'EXPEDIENTE':'EXP', 'SUBCOMANDANTE':'SUBCMT', 'COMANDANTE':'CMT',
+  'ADMINISTRATIVO':'ADM', 'ADMINISTRAÇÃO':'ADM', 'OPERACIONAL':'OPER',
+  'MANUTENÇÃO':'MANUT', 'MANUTENCAO':'MANUT', 'EVENTUAL':'EVENT', 'AUXILIAR':'AUX',
+  'SECRETARIA':'SECR', 'COMBUSTÍVEL':'COMB', 'COMBUSTIVEL':'COMB'
+};
+/* true = já é sigla/código e NÃO deve ser encurtada (P1, RUMB, CMT, ALA/D, 3º, /B) */
+function ehSigla(t){
+  if(t.length<=5) return true;                 // curto o bastante, não precisa mexer
+  if(/\d/.test(t)) return true;                // tem número: P1, ALA/D2, 3º
+  if(!/[AEIOUÁÉÍÓÚÂÊÔÃÕ]/i.test(t)) return true;  // sem vogal: sigla consonantal (SMT, TES)
+  return false;
+}
+function abreviaInst(txt, maxTok){
+  if(!txt) return '';
+  maxTok = maxTok || 6;
+  // separa preservando os delimitadores (espaço, /, -) para não perder a forma original
+  return String(txt).split(/([\s\/\-]+)/).map(function(tok){
+    if(/^[\s\/\-]+$/.test(tok) || !tok) return tok;      // é separador: devolve intacto
+    var chave = tok.toUpperCase();
+    if(ABREV_INST[chave]) return ABREV_INST[chave];      // termo institucional conhecido
+    if(ehSigla(tok) || tok.length<=maxTok) return tok;   // sigla ou já cabe
+    return tok.slice(0, maxTok) + '.';                   // fallback: encurta e marca com ponto
+  }).join('').replace(/\s+/g,' ').trim();
+}
 function cardPM(m, opts){
   opts = opts||{};
   var foto = el('div',{cls:'card-pm__foto'});
@@ -1487,15 +1527,15 @@ function cardPM(m, opts){
   var c = el('div',{cls:'card-pm'+(opts.selo?' card-pm--chefe':''),tabindex:opts.click?'0':null},[
     el('div',{cls:'card-pm__topo'},[
       el('img',{cls:'card-pm__brasao',src:window.__BRASAO__,alt:''}),
-      el('div',{cls:'card-pm__posto',text:m.posto||'—'}),
-      el('span',{cls:'card-pm__chip',text:m.reparticao||'—'})
+      el('div',{cls:'card-pm__posto',text:m.posto||'—',title:m.posto||''}),
+      el('span',{cls:'card-pm__chip',text:abreviaInst(m.reparticao,6)||'—',title:m.reparticao||''})
     ]),
     foto,
     el('div',{cls:'card-pm__base'},[
       opts.selo ? el('div',{cls:'card-pm__selo'+(/EVENTUAL/.test(opts.selo)?' card-pm__selo--event':''),text:opts.selo}) : null,
       el('div',{cls:'card-pm__nome',text:m.nome}),
       el('div',{cls:'card-pm__rg',text:'RG '+m.rg}),
-      el('div',{cls:'card-pm__funcao',text:m.funcao||''}),
+      el('div',{cls:'card-pm__funcao',text:abreviaInst(m.funcao,8),title:m.funcao||''}),
       tags
     ])
   ]);
