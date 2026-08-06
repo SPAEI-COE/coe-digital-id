@@ -298,7 +298,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier-secao{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1em 1.1em 1.2em}
 .hier-secao-tit{font-family:var(--display);font-weight:600;font-size:1em;color:var(--azul-800);text-transform:uppercase;letter-spacing:.1em;padding-bottom:.5em;margin-bottom:.7em;border-bottom:2px solid var(--ouro-claro);display:flex;align-items:baseline;gap:.6em}
 .hier-secao-tit small{font-family:var(--mono);font-size:.6em;color:var(--grafite-700);letter-spacing:0}
-.hier-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.6em,1fr));gap:.85em}
+.hier-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(7.6em,1fr));gap:.85em}
 .hier-cards .card-pm{font-size:12.8px}
 .hier-chefe-wrap{display:flex;flex-direction:column;gap:.35em;max-width:12em}
 .hier-chefe-rot{font-family:var(--display);font-weight:600;font-size:.62em;letter-spacing:.12em;color:var(--ouro);text-transform:uppercase}
@@ -307,7 +307,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--azul-600);outlin
 .hier--tv .hier-secao-tit{color:var(--ouro-claro)}
 .hier--tv .hier-secao-tit small{color:var(--prata-300)}
 .hier--tv .hier-cargo-rot{color:var(--prata-300)}
-.hier--tv .hier-cards{grid-template-columns:repeat(auto-fill,minmax(6.8em,1fr))}
+.hier--tv .hier-cards{grid-template-columns:repeat(auto-fit,minmax(6.8em,1fr))}
+.hier--tv .hier-cards .card-pm{font-size:.8em}
 .pastas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(11em,1fr));gap:.9em}
 .pasta-card{background:var(--neve);border:1px solid var(--prata-200);border-radius:var(--r-lg);padding:1.1em .9em;text-align:center;cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s}
 .pasta-card:hover,.pasta-card:focus{transform:translateY(-2px);box-shadow:0 6px 18px rgba(9,0,141,.12);border-color:var(--ouro-claro);outline:none}
@@ -354,7 +355,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v26 · 2026-08-05 · Novo modo TV "🎬 Modo créditos": cards 20% menores que o padrão da TV, rolagem automática contínua (créditos de filme), com pausar/retomar e velocidade ajustáveis — só ajuste local deste televisor (localStorage, nunca grava no Firebase, mesma regra dos demais controles da TV). Reaproveita 100% a montagem de cards já existente (montaGradeSecao); nenhuma outra tela do app foi tocada. Mantém v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções), v23 (Login Mestre + cards do admin -20%), v22 (rota #/tv-hier).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v27 · 2026-08-06 · CORREÇÃO: Modo créditos agora usa a MESMA estrutura do Dashboard Hierárquico (montaHierarquia — Comandante→Subcomandante→Seções), toca sozinho assim que selecionado, só pausa se o admin pedir; velocidade-base aumentada (perceptível já no 1º segundo). BUG REAL corrigido em #/tv-hier E no modo créditos: grid usava auto-fill (reservava colunas vazias quando a seção tem poucos militares numa tela larga — cards existentes ficavam pequenos e empurrados à esquerda); trocado para auto-fit. Tamanho do card na TV Hierárquica agora acompanha a escala real da TV (antes travado em 12.8px fixo). Mantém v26 (modo créditos), v25 (Subcomandante por cargo), v24 (catálogo de Cargos/Funções), v23 (Login Mestre + cards do admin -20%).';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -1723,11 +1724,15 @@ function renderTV(app){
     if(modoAtual()==='pastas'){
       secLbl.textContent = nomeSecao(VIEW.tvPasta);
       fluxo.appendChild(montaGradeSecao(VIEW.tvPasta, md));
+    } else if(modoAtual()==='creditos'){
+      /* REGRA (05/08, pedido do usuário): modo créditos tem que ser IDÊNTICO ao
+         Dashboard Hierárquico, mesma leitura — por isso reaproveita a MESMA
+         montaHierarquia({tv:true}) usada por #/tv-hier (renderTVHier), em vez
+         da grade plana por seção. Zero lógica de dados duplicada. */
+      secLbl.textContent = 'Estrutura Hierárquica · créditos';
+      fluxo.appendChild(montaHierarquia({tv:true}));
     } else {
-      // 'grade' e 'creditos' mostram o mesmo conteúdo (todas as seções) — só
-      // muda o contêiner (tamanho/rolagem automática), reaproveitando 100% da
-      // montagem de cards já existente, sem duplicar lógica de dados.
-      secLbl.textContent = modoAtual()==='creditos' ? 'Efetivo geral · créditos' : 'Efetivo geral';
+      secLbl.textContent = 'Efetivo geral';
       secs.forEach(function(s){ fluxo.appendChild(montaGradeSecao(s, md)); });
     }
     corpo.appendChild(fluxo);
@@ -1765,7 +1770,7 @@ function renderTV(app){
     if(modoAtual()!=='creditos' || VIEW.tvCreditosPausado) return;
     var max = corpo.scrollHeight - corpo.clientHeight;
     if(max<=0) return;
-    var novo = corpo.scrollTop + creditosVelAtual();
+    var novo = corpo.scrollTop + creditosVelAtual()*2.2;   // passo-base maior: perceptível já no 1º segundo
     corpo.scrollTop = novo >= max ? 0 : novo;
   }, 40);
   TV_TIMERS = [relogTimer, vigia, creditosTimer];
