@@ -382,7 +382,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v36 · 2026-08-07 · NOVO (pedido do usuário): Seções & Pastas ganhou CRUD de seção real — botão "+ Nova seção" cria/renomeia/atribui militar (marcar move a lotação pra cá; desmarcar não desfaz nada, evita estado "sem seção" ambíguo) e exclui (só com a seção vazia — guarda conta chefia titular/eventual residual, não só lotação direta). Renomear propaga reparticao + chefias/chefiasEvent de todos afetados + ordem/ocultas, com confirmação prévia mostrando quantas fichas serão tocadas antes de gravar qualquer coisa. 31 testes headless verdes nesta sessão (DOM real via vSecoes/novaSecao/editaSecao, sem mock de Firebase, zero erro de JS); "+ Nova pasta" sem regressão. --card-col/--card-fs NÃO tocados. Mantém v35, v34, v33.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v37 · 2026-08-07 · NOVO (pedido do usuário, correções de ambiguidade): Função e Curso agora sempre gravam a grafia já usada no catálogo quando existe uma (achaCat case-insensitive) — antes "Motorista"/"MOTORISTA" viravam categorias diferentes nos filtros; Função nem sincronizava com o catálogo. Botão "🔧 Sincronizar grafias com o catálogo" em Categorias corrige em lote o que já estava divergente no efetivo, sem digitar nada. Os 4 campos de texto livre da aba Dados funcionais (Funções anteriores/Histórico de seções/Movimentações/Designações) saíram do formulário — cobriam as mesmas categorias da aba Histórico estruturada, risco de duas fontes divergentes. Texto residual migra sozinho pro Histórico (tipo "Outro") ao salvar a aba normalmente, e há botão de migração em lote em Diagnóstico — nada se perde. 28 testes headless verdes nesta sessão (DOM real via abaIdent/abaCursos/abaFunc/vDiag/vCategorias, sem mock de Firebase, zero erro de JS). --card-col/--card-fs NÃO tocados. Mantém v36, v35, v34.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -479,6 +479,18 @@ function achaCat(lista, nome){
   var alvo = normCat(nome).toLowerCase();
   for(var i=0;i<lista.length;i++) if(lista[i].toLowerCase()===alvo) return i;
   return -1;
+}
+/* Correção (07/08, pedido do usuário — evitar "MOTORISTA" x "Motorista" como
+   categorias diferentes): se o texto digitado já bate com um item do catálogo
+   (ignorando maiúsc/minúsc e espaços), devolve a grafia CANÔNICA do catálogo em
+   vez do que a pessoa digitou. Se não bate com nada, devolve só normalizado —
+   é um valor genuinamente novo. */
+function catSnap(tipo, texto){
+  var v = normCat(texto);
+  if(!v) return v;
+  var lista = catLista(tipo);
+  var i = achaCat(lista, v);
+  return i>=0 ? lista[i] : v;
 }
 function catAdicionar(tipo, nome, descr){
   nome = normCat(nome); if(!nome) return false;
@@ -2097,7 +2109,16 @@ function vDiag(main){
   var btU = el('button',{cls:'btn btn-borda'},['🔄 Forçar Atualização']);
   btU.addEventListener('click', function(){ confirmar('Buscar a versão mais recente do app agora? A tela vai recarregar.', forcarAtualizacao); });
 
-  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF,btU]));
+  var qtdMigravel = efetivo().filter(function(m){ return extraiHistLivre(fichaGet(m,'func')||{}).length; }).length;
+  var btH = el('button',{cls:'btn btn-ouro'},['🕰️ Migrar histórico texto livre ('+qtdMigravel+')']);
+  btH.addEventListener('click', function(){
+    if(!qtdMigravel){ toast('Nada para migrar — nenhum campo de texto livre preenchido.','ok'); return; }
+    confirmar('Mover Funções anteriores, Histórico de seções, Movimentações e Designações de '+qtdMigravel+' ficha(s) pro Histórico estruturado (aba Histórico, tipo "Outro")? Os campos de texto livre ficam vazios depois — o texto original não se perde, só muda de lugar.', function(){
+      migrarHistoricoLivre().then(function(){ btH.textContent='🕰️ Migrar histórico texto livre (0)'; pre.textContent = relatorioDiag(); });
+    });
+  });
+
+  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF,btU,btH]));
   main.appendChild(res);
   main.appendChild(pre);
 }
@@ -2426,9 +2447,42 @@ function vGerador(main){
 }
 
 /* ---- Categorias (especialidades e cursos geríveis pelo ADM) ---- */
+/* Correção (07/08, migração de dado já existente — clique único do admin,
+   sem digitar nada): varre todo o efetivo e ajusta cargo/curso já salvos que
+   divergem do catálogo só por maiúsc/minúsc/espaço (ex.: "motorista" e
+   "MOTORISTA" viram a mesma grafia). Reusa exatamente o mesmo formato de
+   gravação da tela normal (salvarConjunto), nunca inventa um formato novo. */
+function sincronizarGrafias(){
+  var proms = [], tocados = 0;
+  efetivo().forEach(function(m){
+    var novoFuncao = catSnap('cargos', m.funcao);
+    var funcaoMudou = !!(novoFuncao && novoFuncao !== m.funcao);
+    var extras = (fichaGet(m,'cursos') || []).map(function(r){ return Object.assign({}, r); });
+    var cursosMudou = false;
+    extras.forEach(function(r){ var novo = catSnap('cursos', r.curso); if(novo && novo !== r.curso){ r.curso = novo; cursosMudou = true; } });
+    if(!funcaoMudou && !cursosMudou) return;
+    tocados++;
+    if(cursosMudou){
+      var campos = Object.assign({}, funcaoMudou?{funcao:novoFuncao}:{}, {
+        cursos: extras.map(function(r){ return {nome:r.curso, validade:(r.indeterminado==='Sim')?'':(r.validade||'')}; })
+      });
+      proms.push(salvarConjunto(m.rg, campos, 'cursos', extras, 'sincronização de grafia (catálogo) — '+m.rg));
+    } else {
+      proms.push(salvarBase(m.rg, {funcao:novoFuncao}));
+    }
+  });
+  if(!tocados){ toast('Nada para sincronizar — todas as grafias já batem com o catálogo.','ok'); return; }
+  Promise.all(proms).then(function(res){
+    var falhas = res.filter(function(r){return r===false;}).length;
+    auditar('sincronizar_grafias','', tocados+' ficha(s)');
+    toast((falhas?(falhas+' falha(s) de '+tocados+' — veja o aviso de sincronização'):(tocados+' ficha(s) sincronizada(s) com o catálogo'))+'.', falhas?'erro':'ok');
+  });
+}
+
 function vCategorias(main){
-  main.appendChild(el('div',{cls:'adm-h1'},['Categorias']));
-  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Cargos/funções, especialidades técnicas e cursos usados nas fichas e nos relatórios. Renomear aqui atualiza automaticamente todos os militares que possuem o item; excluir remove só o item do catálogo (com confirmação se estiver em uso).'}));
+  main.appendChild(el('div',{cls:'adm-h1'},['Categorias',
+    el('button',{cls:'btn btn-ouro',onclick:function(){ confirmar('Ajustar cargo e curso de TODO o efetivo pra bater com a grafia já cadastrada no catálogo (ex.: "motorista" → "Motorista")? Não cria nada novo, só corrige divergência de maiúsc/minúsc/espaço.', sincronizarGrafias); }},['🔧 Sincronizar grafias com o catálogo'])]));
+  main.appendChild(el('p',{style:'font-size:.8rem;color:#4a5262;margin-bottom:1em',text:'Cargos/funções, especialidades técnicas e cursos usados nas fichas e nos relatórios. Renomear aqui atualiza automaticamente todos os militares que possuem o item; excluir remove só o item do catálogo (com confirmação se estiver em uso). Ao salvar uma ficha, cargo e curso agora sempre gravam a grafia do catálogo quando já existe uma — o botão acima corrige o que já estava salvo antes dessa correção.'}));
 
   function painelCatalogo(titulo, tipo){
     var pn = el('div',{cls:'painel'});
@@ -3315,8 +3369,45 @@ function abaIdent(area, m, md){
     // qualquer chefia marcada é descartada no salvamento.
     if(ehOficial({posto:b.posto})){ b.chefias = chefiasSel.slice(); b.chefiasEvent = eventSel.filter(function(s){return chefiasSel.indexOf(s)>=0;}); }
     else { b.chefias = []; b.chefiasEvent = []; }
+    // Correção (07/08): "Motorista"/"MOTORISTA" digitados em momentos
+    // diferentes viravam categorias distintas nos filtros/relatórios — agora
+    // sempre grava a grafia já usada no catálogo quando existe uma, e registra
+    // no catálogo quando é genuinamente nova (funcao nunca sincronizava antes).
+    b.funcao = catSnap('cargos', b.funcao);
+    if(b.funcao) catAdicionar('cargos', b.funcao, 'cargo criado via ficha de '+m.rg);
     return salvarConjunto(m.rg, b, 'ident', extra.ler(), 'identificação de '+m.rg);
   }, md));
+}
+/* Correção (07/08): Funções anteriores, Histórico de seções, Movimentações e
+   Designações eram 4 campos de texto livre soltos, cobrindo exatamente as
+   mesmas categorias da aba Histórico (estruturada, com data/tipo/descrição) —
+   duas fontes pra mesma informação podiam divergir. Migrados pro Histórico;
+   ver extraiHistLivre/migrarHistoricoLivre e o botão em Diagnóstico. */
+function extraiHistLivre(d){
+  var pares = [['funcAnt','Funções anteriores'],['secAnt','Histórico de seções'],['movs','Movimentações'],['desig','Designações']];
+  var novas = [];
+  pares.forEach(function(p){ var v=((d||{})[p[0]]||'').trim(); if(v) novas.push({data:'',tipo:'Outro',descr:'['+p[1]+'] '+v,doc:''}); });
+  return novas;
+}
+function migrarHistoricoLivre(){
+  var proms=[], tocados=0;
+  efetivo().forEach(function(m){
+    var d = fichaGet(m,'func')||{};
+    var novas = extraiHistLivre(d);
+    if(!novas.length) return;
+    tocados++;
+    if(!OVR[m.rg]) OVR[m.rg]={rg:m.rg};
+    if(!OVR[m.rg].ficha) OVR[m.rg].ficha={};
+    OVR[m.rg].ficha.hist = (fichaGet(m,'hist')||[]).concat(novas);
+    OVR[m.rg].ficha.func = Object.assign({}, d, {funcAnt:'',secAnt:'',movs:'',desig:''});
+    auditar('migrar_historico', m.rg, novas.length+' entrada(s)');
+    proms.push(gravar('mil/'+m.rg, OVR[m.rg], 'migração histórico texto livre → estruturado — '+m.rg));
+  });
+  return Promise.all(proms).then(function(res){
+    var falhas = res.filter(function(r){return r===false;}).length;
+    toast((falhas?(falhas+' falha(s) de '+tocados):(tocados+' ficha(s) migrada(s) para o Histórico'))+'.', falhas?'erro':'ok');
+    return {tocados:tocados, falhas:falhas};
+  });
 }
 function abaFunc(area, m, md){
   var d = fichaGet(m,'func')||{};
@@ -3327,13 +3418,12 @@ function abaFunc(area, m, md){
     {id:'bolinclusao',rot:'Boletim de inclusão'},
     {id:'origem',rot:'Unidade de origem'},
     {id:'atual',rot:'Unidade atual',def:'COE'},
-    {id:'funcAnt',rot:'Funções anteriores',tipo:'textarea',largo:true},
-    {id:'secAnt',rot:'Histórico de seções',tipo:'textarea',largo:true},
-    {id:'afast',rot:'Afastamento em vigor'},
-    {id:'movs',rot:'Movimentações',tipo:'textarea',largo:true},
-    {id:'desig',rot:'Designações',tipo:'textarea',largo:true}
+    {id:'afast',rot:'Afastamento em vigor'}
   ], d);
   area.appendChild(f.no);
+  if(extraiHistLivre(d).length){
+    area.appendChild(el('p',{cls:'nota-info',text:'Esta ficha ainda tem texto livre antigo (funções anteriores/movimentações/designações). Ele vai ser movido automaticamente pro Histórico assim que você salvar esta aba — ou use o botão em Diagnóstico pra migrar tudo de uma vez.'}));
+  }
   area.appendChild(el('h3',{style:'font-family:var(--display);text-transform:uppercase;font-size:.85rem;color:var(--azul-900);margin:1.1em 0 .6em',text:'Especialidades técnicas'}));
   var espSel = (d.especialidades||[]).slice();
   var espBox = el('div',{cls:'tags-sel'});
@@ -3361,6 +3451,13 @@ function abaFunc(area, m, md){
   area.appendChild(botaoSalvar(function(){
     if(!f.valido()) return false;
     var o=f.ler(); o.especialidades=espSel;
+    var novasHist = extraiHistLivre(d);
+    if(novasHist.length){
+      if(!OVR[m.rg]) OVR[m.rg]={rg:m.rg};
+      if(!OVR[m.rg].ficha) OVR[m.rg].ficha={};
+      OVR[m.rg].ficha.hist = (fichaGet(m,'hist')||[]).concat(novasHist);
+      auditar('migrar_historico', m.rg, novasHist.length+' entrada(s) (ao salvar)');
+    }
     return salvarFicha(m.rg,'func',o);
   }, md));
 }
@@ -3444,7 +3541,11 @@ function abaCursos(area, m, md){
     {id:'validade',rot:'Validade',tipo:'date',escondeSe:'indeterminado'},
     {id:'obs',rot:'Observações',largo:true}
   ], {}, function(regs){
-    regs.forEach(function(r){ if(normCat(r.curso) && achaCat(catCursos(), r.curso)<0) catAdicionar('cursos', r.curso, 'curso criado via ficha de '+m.rg); });
+    // Correção (07/08): antes só registrava curso novo no catálogo quando não
+    // batia com nada — mas mesmo batendo, o registro em si ficava com a grafia
+    // digitada (ex.: "curso de tiro" divergindo de "Curso de Tiro" já existente).
+    // Agora sempre grava a grafia canônica do catálogo quando já existe uma.
+    regs.forEach(function(r){ r.curso = catSnap('cursos', r.curso); if(r.curso && achaCat(catCursos(), r.curso)<0) catAdicionar('cursos', r.curso, 'curso criado via ficha de '+m.rg); });
     return salvarConjunto(m.rg, {cursos:regs.map(function(r){ return {nome:r.curso, validade:(r.indeterminado==='Sim')?'':(r.validade||'')}; })},
                           'cursos', regs, 'cursos de '+m.rg);
   }, md);
