@@ -382,7 +382,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v33 · 2026-08-07 · NOVO (pedido do usuário): aviso de documentos vencidos/a vencer logo abaixo do cabeçalho da ficha (clicável, pula direto pra aba Documentos), listando nome+data de cada documento pendente; aba "Documentos" ganha marcador visual (bolinha laranja/vermelha, mesma convenção do 🔒 de área restrita) sempre que há pendência, visível mesmo se a ficha abrir noutra aba. Aba Saúde ganhou campo "Início" além do já existente "Término" — os dois só aparecem no formulário quando Aptidão = Apto B ou Apto C (ocultos nas demais situações, nunca exigidos); Término continua sendo o único campo que determina o selo vencido/a vencer no card (Início é só registro, não altera essa regra). Novas funções centrais: carregaDocsRG (carga individual reaproveitada por abaDocs e pelo aviso da ficha) e alertaDocsRG (lista os documentos vencidos/a vencer de um RG). 20 novos testes headless verdes (aviso, marcador de aba, campos condicionais) + os 47 testes da v32 continuam verdes. --card-col/--card-fs NÃO tocados. Mantém v32, v31, v30, v29.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v34 · 2026-08-07 · CORREÇÃO DE BUG (relatado pelo usuário, RG 65339): o card mostrava "Doc. vencido" mesmo sem NENHUM documento anexado. CAUSA RAIZ (auditada, não suposição): função situacaoDocumental() (criada na v32) somava vencMaisProximo() — mecanismo ANTIGO que lê CNH/aptidão de curso/curso da importação original, nada a ver com a aba Documentos — com statusDocsRG() (documento anexado). RG 65339 tem CNH com validade 2026-07-15 (já vencida) e ZERO documentos anexados; o rótulo genérico "Doc. vencido" fazia parecer que havia um documento vencido quando na verdade era a CNH. CORREÇÃO: situacaoDocumental() removida; as duas fontes ficam DESACOPLADAS com rótulos honestos em todo o app — "Doc. vencido/a vencer" só a partir de documento REALMENTE anexado (statusDocsRG); "CNH/Curso vencido/Xd" a partir de vencMaisProximo (mecanismo antigo, intacto, só renomeado). Aplicado em cardPM (2 tarjas independentes), Dashboard (KPIs "CNH/Curso..." revertidos à fonte original + novo KPI dedicado "Militares com documento anexado vencido" apontando pro painel Documentos Vencidos) e filtro do Efetivo (revertido à fonte original, com nota indicando o painel novo para documentos anexados). Nenhum dado foi apagado ou alterado — CNH de ninguém foi mexida, só a rotulagem/arquitetura do alerta. 3 novos testes de regressão (incl. reprodução exata do bug com o RG 65339 real do seed) + os 67 testes anteriores continuam verdes. --card-col/--card-fs NÃO tocados. Mantém v33, v32, v31.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -854,18 +854,14 @@ function statusDocsRG(rg){
   });
   return {vencidos:vencidos, aVencer:aVencer};
 }
-/* Situação documental agregada de um militar: combina vencMaisProximo() (habilitação/
-   aptidões de curso/cursos — já existente) com os documentos anexados que tiverem
-   validade explícita (novo). dsRG null (RG ainda não carregado) simplesmente não
-   soma nada — nunca é tratado como "vencido". */
-function situacaoDocumental(m){
-  var v = vencMaisProximo(m);
-  var ds = statusDocsRG(m.rg);
-  return {
-    vencido: !!((v && v.dias<0) || (ds && ds.vencidos>0)),
-    aVencer: !!((v && v.dias<=60) || (ds && ds.aVencer>0))
-  };
-}
+/* DESACOPLADO (07/08, correção de rótulo pedida pelo usuário — RG 65339 mostrava
+   "Doc. vencido" sem ter NENHUM documento anexado, só CNH vencida da importação
+   original): existia aqui uma função situacaoDocumental() que somava vencMaisProximo()
+   (CNH/aptidão de curso/curso — dado da importação, mecanismo antigo, nada a ver com
+   a aba Documentos) com statusDocsRG() (documento anexado com validade — mecanismo
+   novo) num resultado só. Isso fazia CNH vencida aparecer rotulada como "Documento
+   vencido", que é uma coisa completamente diferente e confundia o ADM. As duas fontes
+   passam a ser usadas SEPARADAS, cada uma com o rótulo certo, em cardPM/vDash/vEfetivo. */
 /* Carga em BLOCO de todos os documentos de todo o efetivo — UMA única leitura
    (NS+'/docs'), nunca uma consulta por card/por RG. Preserva documentos ainda
    pendentes de confirmação (info._local) que o servidor ainda não tenha —
@@ -1627,10 +1623,16 @@ function cardPM(m, opts){
   if(m.situacao && m.situacao!=='ATIVO') tags.appendChild(el('span',{cls:'tag tag-alerta',text:m.situacao}));
   else tags.appendChild(el('span',{cls:'tag tag-ok',text:'Ativo'}));
   if(m.adido) tags.appendChild(el('span',{cls:'tag tag-azul',text:'Adido'}));
+  // Documento anexado (aba Documentos) com validade explícita — só isto conta
+  // como "Doc.": nunca soma CNH/curso, que é outra fonte de dado (ver abaixo).
+  var dsRG = statusDocsRG(m.rg);
+  if(dsRG && dsRG.vencidos>0) tags.appendChild(el('span',{cls:'tag tag-erro',text:'Doc. vencido'}));
+  else if(dsRG && dsRG.aVencer>0) tags.appendChild(el('span',{cls:'tag tag-alerta',text:'Doc. a vencer'}));
+  // CNH/aptidão de curso/curso (vencMaisProximo, mecanismo já existente antes da
+  // aba Documentos) — rótulo próprio, nunca chamado de "documento" no card.
   var v = vencMaisProximo(m);
-  var sitDoc = situacaoDocumental(m);
-  if(sitDoc.vencido) tags.appendChild(el('span',{cls:'tag tag-erro',text:'Doc. vencido'}));
-  else if(sitDoc.aVencer) tags.appendChild(el('span',{cls:'tag tag-alerta',text:(v && v.dias<=60 && v.dias>=0) ? ('Vence '+v.dias+'d') : 'Vence em breve'}));
+  if(v && v.dias<0) tags.appendChild(el('span',{cls:'tag tag-erro',text:'CNH/Curso vencido'}));
+  else if(v && v.dias<=60) tags.appendChild(el('span',{cls:'tag tag-alerta',text:'CNH/Curso '+v.dias+'d'}));
   if(!opts.tv){
     // Aptidão sanitária — ÁREA RESTRITA (mesma regra da aba Saúde): só no card
     // administrativo, jamais no card renderizado dentro da TV/apresentação pública.
@@ -2104,8 +2106,9 @@ function vDiag(main){
 function vDash(main){
   var tudo = efetivo();
   var comFoto = tudo.filter(function(m){ return FOTOS[m.rg]; }).length;
-  var venc = tudo.filter(function(m){ var s=situacaoDocumental(m); return s.vencido||s.aVencer; }).length;
-  var vencidos = tudo.filter(function(m){ return situacaoDocumental(m).vencido; }).length;
+  var venc = tudo.filter(function(m){ var v=vencMaisProximo(m); return v && v.dias<=60; }).length;
+  var vencidos = tudo.filter(function(m){ var v=vencMaisProximo(m); return v && v.dias<0; }).length;
+  var docsVenc = tudo.filter(function(m){ var ds=statusDocsRG(m.rg); return ds && ds.vencidos>0; }).length;
   var adidos = tudo.filter(function(m){ return m.adido; }).length;
   var ativos = tudo.filter(function(m){ return (m.situacao||'ATIVO')==='ATIVO'; }).length;
   var comNasc = tudo.filter(function(m){ return (m.ficha.ident||{}).nasc; }).length;
@@ -2118,6 +2121,7 @@ function vDash(main){
     return el('div',{cls:'kpi '+(cls||'')+(clique?' clic':''),onclick:clique||null},[el('div',{cls:'n',text:String(n)}),el('div',{cls:'l',text:l})]);
   }
   function irEfetivo(sit){ return function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:sit||''}; VIEW.abaAdm='efetivo'; renderRota(); }; }
+  function irDocsVencidos(){ VIEW.abaAdm='docsvenc'; renderRota(); }
 
   main.appendChild(el('div',{cls:'sep-dash',text:'Efetivo'}));
   main.appendChild(el('div',{cls:'kpis'},[
@@ -2127,11 +2131,16 @@ function vDash(main){
     kpi(tudo.length-adidos,'Efetivo próprio (COE)','',function(){ abrirListaDrawer('Efetivo próprio (COE)', tudo.filter(function(m){return !m.adido;})); })
   ]));
 
-  main.appendChild(el('div',{cls:'sep-dash',text:'Documentação'}));
+  main.appendChild(el('div',{cls:'sep-dash',text:'CNH / Aptidão de curso / Curso'}));
   main.appendChild(el('div',{cls:'kpis'},[
     kpi(comFoto+' / '+tudo.length,'Com foto anexada','ouro',irEfetivo('semfoto')),
-    kpi(venc,'Vencimentos ≤ 60 dias','alerta',irEfetivo('venc')),
-    kpi(vencidos,'Documentos vencidos','erro',irEfetivo('vencido'))
+    kpi(venc,'CNH/Curso a vencer ≤ 60 dias','alerta',irEfetivo('venc')),
+    kpi(vencidos,'CNH/Curso vencido(s)','erro',irEfetivo('vencido'))
+  ]));
+
+  main.appendChild(el('div',{cls:'sep-dash',text:'Documentos anexados (aba Documentos)'}));
+  main.appendChild(el('div',{cls:'kpis'},[
+    kpi(docsVenc,'Militares com documento anexado vencido','erro',irDocsVencidos)
   ]));
 
   main.appendChild(el('div',{cls:'sep-dash',text:'Perfil do efetivo (dados para relatórios)'}));
@@ -2603,9 +2612,6 @@ function definirDestaque(chaveMes){
 /* ---- Efetivo ---- */
 function vEfetivo(main){
   var f = VIEW.filtro;
-  if((f.sit==='venc'||f.sit==='vencido') && !DOCS_TODOS_CARREGADOS && DB){
-    carregaTodosDocs(function(){ if(VIEW.abaAdm==='efetivo') renderRota(); });
-  }
   main.appendChild(el('div',{cls:'adm-h1'},['Efetivo',
     el('div',{style:'display:flex;gap:.5em;flex-wrap:wrap'},[
       el('button',{cls:'btn btn-borda',onclick:importarFichas},['📥 Importar fichas']),
@@ -2618,20 +2624,21 @@ function vEfetivo(main){
   var selSit = el('select',{onchange:function(e){ f.sit=e.target.value; renderRota(); }},[
     el('option',{value:'',text:'Situação: todas'}),
     el('option',{value:'semfoto',text:'Sem foto',selected:f.sit==='semfoto'?'':null}),
-    el('option',{value:'venc',text:'Vencimento ≤ 60d',selected:f.sit==='venc'?'':null}),
-    el('option',{value:'vencido',text:'Documento vencido',selected:f.sit==='vencido'?'':null}),
+    el('option',{value:'venc',text:'CNH/Curso a vencer ≤ 60d',selected:f.sit==='venc'?'':null}),
+    el('option',{value:'vencido',text:'CNH/Curso vencido',selected:f.sit==='vencido'?'':null}),
     el('option',{value:'adido',text:'Adidos',selected:f.sit==='adido'?'':null})
   ]);
   main.appendChild(el('div',{cls:'filtros'},[selSec,selPosto,selSit,
     el('button',{cls:'btn btn-borda btn-min',onclick:function(){ VIEW.filtro={q:'',sec:'',posto:'',sit:''}; renderRota(); }},['Limpar filtros'])]));
+  main.appendChild(el('p',{cls:'nota-info',text:'Para documentos anexados (aba Documentos) vencidos ou a vencer, use o menu "Documentos Vencidos".'}));
   var q = (f.q||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   var lista = efetivo().filter(function(m){
     if(f.sec && (f.sec[0]==='@' ? !((CFG.pastas[f.sec.slice(1)]||{}).membros||[]).includes(m.rg) : m.reparticao!==f.sec)) return false;
     if(f.posto && m.posto!==f.posto) return false;
     if(f.sit==='semfoto' && FOTOS[m.rg]) return false;
     if(f.sit==='adido' && !m.adido) return false;
-    if(f.sit==='venc'){ var s1=situacaoDocumental(m); if(!s1.vencido && !s1.aVencer) return false; }
-    if(f.sit==='vencido'){ if(!situacaoDocumental(m).vencido) return false; }
+    if(f.sit==='venc'){ var v1=vencMaisProximo(m); if(!v1||v1.dias>60) return false; }
+    if(f.sit==='vencido'){ var v2=vencMaisProximo(m); if(!v2||v2.dias>=0) return false; }
     if(q){ var alvo=(m.nome+' '+m.rg+' '+m.posto+' '+m.funcao+' '+m.reparticao).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); if(alvo.indexOf(q)<0) return false; }
     return true;
   }).sort(function(a,b){
