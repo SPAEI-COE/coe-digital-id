@@ -3652,13 +3652,17 @@ function abaQR(area, m){
 /* ---- Seções & Pastas ---- */
 function vSecoes(main){
   main.appendChild(el('div',{cls:'adm-h1'},['Seções & Pastas',
-    el('button',{cls:'btn btn-azul',onclick:novaPasta},['+ Nova pasta'])]));
-  main.appendChild(el('p',{cls:'nota-info',text:'A ordem abaixo define a hierarquia de exibição na TV e nas listas. Seções vêm da repartição de cada militar; pastas (borda dourada) são agrupamentos livres criados pelo administrador. Seções ocultas não aparecem na TV.'}));
+    el('div',{style:'display:flex;gap:.5em'},[
+      el('button',{cls:'btn btn-ouro',onclick:novaSecao},['+ Nova seção']),
+      el('button',{cls:'btn btn-azul',onclick:novaPasta},['+ Nova pasta'])
+    ])]));
+  main.appendChild(el('p',{cls:'nota-info',text:'A ordem abaixo define a hierarquia de exibição na TV e nas listas. Seção é lotação oficial (1 por militar) — crie/renomeie/atribua pelo botão "+ Nova seção" ou pelo ✎ de cada linha. Pasta (borda dourada) é um agrupamento livre à parte, sem afetar a lotação. Seções ocultas não aparecem na TV.'}));
   var ordem = ordemSecoes();
   var box = el('div');
   ordem.forEach(function(s, i){
     var custom = s[0]==='@';
     var oculta = (CFG.ocultas||[]).indexOf(s)>=0;
+    var vazia = membrosSecao(s).length===0;
     var item = el('div',{cls:'sec-item'+(custom?' custom':'')},[
       el('div',{cls:'mv'},[
         el('button',{title:'Mover para cima',onclick:function(){ mover(i,-1); },html:'▲'}),
@@ -3667,8 +3671,9 @@ function vSecoes(main){
       el('span',{cls:'nm',text:nomeSecao(s)+(oculta?' (oculta na TV)':'')}),
       el('span',{cls:'ct mono',text:membrosSecao(s).length+' PM'}),
       el('button',{cls:'btn btn-borda btn-min',onclick:function(){ alternaOculta(s); }},[oculta?'Mostrar na TV':'Ocultar da TV']),
-      custom?el('button',{cls:'btn btn-borda btn-min',onclick:function(){ editaPasta(s.slice(1)); }},['✎ Editar']):null,
-      custom?el('button',{cls:'btn btn-erro btn-min',onclick:function(){ confirmar('Excluir a pasta "'+nomeSecao(s)+'"? Os militares continuam nas suas seções.',function(){ delete CFG.pastas[s.slice(1)]; CFG.ordem=ordemSecoes().filter(function(x){return x!==s;}); gravar('cfg',CFG,'exclusão de pasta'); auditar('pasta_excluir','',nomeSecao(s)); }); }},['✕']):null
+      el('button',{cls:'btn btn-borda btn-min',onclick:function(){ custom?editaPasta(s.slice(1)):editaSecao(s); }},['✎ Editar']),
+      custom?el('button',{cls:'btn btn-erro btn-min',onclick:function(){ confirmar('Excluir a pasta "'+nomeSecao(s)+'"? Os militares continuam nas suas seções.',function(){ delete CFG.pastas[s.slice(1)]; CFG.ordem=ordemSecoes().filter(function(x){return x!==s;}); gravar('cfg',CFG,'exclusão de pasta'); auditar('pasta_excluir','',nomeSecao(s)); }); }},['✕']):null,
+      (!custom && vazia)?el('button',{cls:'btn btn-erro btn-min',title:'Só é possível excluir seção sem militares',onclick:function(){ confirmar('Excluir a seção "'+nomeSecao(s)+'"? Ela não tem nenhum militar no momento.',function(){ CFG.ordem=ordemSecoes().filter(function(x){return x!==s;}); CFG.ocultas=(CFG.ocultas||[]).filter(function(x){return x!==s;}); gravar('cfg',CFG,'exclusão de seção "'+s+'"'); auditar('secao_excluir','',s); }); }},['✕']):null
     ]);
     box.appendChild(item);
   });
@@ -3712,6 +3717,73 @@ function editaPasta(id){
       f();
     }}
   ]);
+}
+
+function novaSecao(){ editaSecao(null); }
+function editaSecao(nomeAntigo){
+  var iNome = el('input',{value:nomeAntigo||'',placeholder:'Nome da seção (ex.: TELEMÁTICA)'});
+  var lista = el('div',{style:'max-height:300px;overflow:auto;border:1px solid var(--prata-200);border-radius:6px;padding:.5em;margin-top:.6em'});
+  var marc = {};
+  efetivo().sort(cmpPosto).forEach(function(m){
+    var jaEh = !!(nomeAntigo && m.reparticao===nomeAntigo);
+    if(jaEh) marc[m.rg]=1;
+    var cb = el('input',{type:'checkbox',style:'width:auto',checked:jaEh?'':null,onchange:function(e){ if(e.target.checked) marc[m.rg]=1; else delete marc[m.rg]; }});
+    lista.appendChild(el('label',{style:'display:flex;gap:.5em;align-items:center;font-size:.78rem;padding:.25em 0'},[cb, m.posto+' '+m.nome+' — RG '+m.rg+' ('+(m.reparticao||'sem seção')+')']));
+  });
+  modal(nomeAntigo?'Editar seção':'Nova seção', el('div',{},[
+    el('p',{cls:'nota-info',text:'Diferente de pasta: cada militar pertence a só 1 seção. Marcar aqui MOVE o militar pra esta seção (troca a lotação dele). Desmarcar não faz nada — para tirar alguém, adicione-o em outra seção.'}),
+    el('div',{cls:'campo'},[el('label',{text:'Nome'}),iNome]),
+    el('label',{style:'display:block;font-size:.64rem;font-weight:700;text-transform:uppercase;margin-top:.8em',text:'Membros'}),
+    lista
+  ]),[
+    {rotulo:'Cancelar'},
+    {rotulo:nomeAntigo?'Salvar seção':'Criar seção', cls:'btn-azul', acao:function(f){
+      var nome = iNome.value.trim().toUpperCase();
+      if(!nome){ toast('Dê um nome à seção.','erro'); return; }
+      var reais = ordemSecoes().filter(function(s){return s[0]!=='@';});
+      if(reais.some(function(s){ return s!==nomeAntigo && s.toUpperCase()===nome; })){ toast('Já existe uma seção com esse nome.','erro'); return; }
+      var rgsMarcados = Object.keys(marc);
+      f();
+      if(nomeAntigo && nomeAntigo!==nome){
+        var afetados = efetivo().filter(function(m){ return m.reparticao===nomeAntigo || (m.chefias||[]).indexOf(nomeAntigo)>=0 || (m.chefiasEvent||[]).indexOf(nomeAntigo)>=0; }).length;
+        confirmar('Renomear "'+nomeAntigo+'" para "'+nome+'" atualiza '+afetados+' ficha(s) (seção e/ou chefia associada). Confirmar?', function(){
+          executaSecao(nomeAntigo, nome, rgsMarcados);
+        });
+      } else {
+        executaSecao(nomeAntigo, nome, rgsMarcados);
+      }
+    }}
+  ]);
+}
+function executaSecao(nomeAntigo, nomeNovo, rgsMarcados){
+  var renomeando = !!(nomeAntigo && nomeAntigo!==nomeNovo);
+  var porRG = {}; efetivo().forEach(function(m){ porRG[m.rg]=m; });
+  var proms = [];
+  if(renomeando){
+    efetivo().forEach(function(m){
+      var campos=null;
+      if(m.reparticao===nomeAntigo) campos={reparticao:nomeNovo};
+      var ch=(m.chefias||[]).slice(), ev=(m.chefiasEvent||[]).slice(), mudouCh=false;
+      var i=ch.indexOf(nomeAntigo); if(i>=0){ ch[i]=nomeNovo; mudouCh=true; }
+      var j=ev.indexOf(nomeAntigo); if(j>=0){ ev[j]=nomeNovo; mudouCh=true; }
+      if(mudouCh){ campos=campos||{}; campos.chefias=ch; campos.chefiasEvent=ev; }
+      if(campos) proms.push(salvarBase(m.rg, campos));
+    });
+  }
+  rgsMarcados.forEach(function(rg){
+    var m = porRG[rg];
+    if(m && m.reparticao!==nomeNovo) proms.push(salvarBase(rg,{reparticao:nomeNovo}));
+  });
+  CFG.ordem = ordemSecoes().map(function(s){ return (renomeando && s===nomeAntigo) ? nomeNovo : s; });
+  if(!nomeAntigo && CFG.ordem.indexOf(nomeNovo)<0) CFG.ordem.push(nomeNovo);
+  if(renomeando) CFG.ocultas = (CFG.ocultas||[]).map(function(s){ return s===nomeAntigo?nomeNovo:s; });
+  proms.push(gravar('cfg',CFG,(nomeAntigo?'renomear seção para "':'criar seção "')+nomeNovo+'"'));
+  auditar(nomeAntigo?'secao_editar':'secao_criar','',nomeNovo);
+  Promise.all(proms).then(function(res){
+    var falhas = res.filter(function(r){return r===false;}).length;
+    if(falhas) toast(falhas+' gravação(ões) falharam — veja o aviso de sincronização no topo.','erro');
+    else toast(nomeAntigo?'Seção "'+nomeNovo+'" atualizada.':'Seção "'+nomeNovo+'" criada.','ok');
+  });
 }
 
 /* ---- Configuração TV ---- */
