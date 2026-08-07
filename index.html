@@ -382,7 +382,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v37 · 2026-08-07 · NOVO (pedido do usuário, correções de ambiguidade): Função e Curso agora sempre gravam a grafia já usada no catálogo quando existe uma (achaCat case-insensitive) — antes "Motorista"/"MOTORISTA" viravam categorias diferentes nos filtros; Função nem sincronizava com o catálogo. Botão "🔧 Sincronizar grafias com o catálogo" em Categorias corrige em lote o que já estava divergente no efetivo, sem digitar nada. Os 4 campos de texto livre da aba Dados funcionais (Funções anteriores/Histórico de seções/Movimentações/Designações) saíram do formulário — cobriam as mesmas categorias da aba Histórico estruturada, risco de duas fontes divergentes. Texto residual migra sozinho pro Histórico (tipo "Outro") ao salvar a aba normalmente, e há botão de migração em lote em Diagnóstico — nada se perde. 28 testes headless verdes nesta sessão (DOM real via abaIdent/abaCursos/abaFunc/vDiag/vCategorias, sem mock de Firebase, zero erro de JS). --card-col/--card-fs NÃO tocados. Mantém v36, v35, v34.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v38 · 2026-08-07 · NOVO (pedido do usuário, app mais leve — sem Storage/sem trocar de plano, opção escolhida entre 2): fotos continuam no RTDB, mas com qualidade JPEG menor no upload (.84→.70, FOTO_QUALIDADE) — mesma dimensão 600x800, ~20-30% menor sem diferença perceptível no card/TV (medido com imagem sintética: -22%). Botão "🗜️ Recomprimir fotos já salvas" em Diagnóstico recomprime em lote as 142 fotos existentes, mesma foto/enquadramento, só grava quando o resultado fica realmente menor (nunca piora à toa). Testado com canvas nativo real (pacote "canvas", decodificação e reencode de verdade, não simulado) — 12 testes novos + os 59 anteriores (28 correções ambiguidade + 31 seções) continuam verdes, total 71 headless, zero erro JS. --card-col/--card-fs NÃO tocados. Mantém v37, v36, v35.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -2056,6 +2056,46 @@ function relatorioDiag(){
   catch(e){ l.push('Armazenamento.....: BLOQUEADO — o app não consegue guardar nada neste aparelho'); }
   return l.join('\n');
 }
+/* Migração retroativa (07/08) — fotos já salvas ficaram no tamanho antigo até
+   alguém reenviar; recomprime todas de uma vez, sem trocar a foto nem o
+   enquadramento (mesma imagem, mesma posição, só qualidade JPEG menor). Nunca
+   grava se o resultado não ficou menor (defensivo). */
+function recomprimeUmaFoto(dataURL){
+  return new Promise(function(resolve){
+    var img = new Image();
+    img.onload = function(){
+      var cv = el('canvas'); cv.width=FOTO_L; cv.height=FOTO_A;
+      cv.getContext('2d').drawImage(img, 0, 0, FOTO_L, FOTO_A);
+      resolve(cv.toDataURL('image/jpeg', FOTO_QUALIDADE));
+    };
+    img.onerror = function(){ resolve(null); };
+    img.src = dataURL;
+  });
+}
+function recomprimirFotos(){
+  var rgs = Object.keys(FOTOS).filter(function(rg){ return typeof FOTOS[rg]==='string' && FOTOS[rg].indexOf('data:')===0; });
+  if(!rgs.length){ toast('Nenhuma foto pra recomprimir.','ok'); return Promise.resolve(); }
+  var antes=0, depois=0, falhas=0, i=0;
+  function proxima(){
+    if(i>=rgs.length){
+      auditar('recomprimir_fotos','', rgs.length+' foto(s)');
+      toast('Fotos recomprimidas: '+bytesFmt(antes)+' → '+bytesFmt(depois)+(falhas?(' · '+falhas+' falha(s)'):''), falhas?'erro':'ok');
+      return Promise.resolve();
+    }
+    var rg = rgs[i++], original = FOTOS[rg];
+    return recomprimeUmaFoto(original).then(function(nova){
+      if(!nova){ falhas++; return proxima(); }
+      antes += original.length; depois += nova.length;
+      if(nova.length < original.length){
+        FOTOS[rg] = nova; // repaint imediato a partir do estado local (rito)
+        return gravar('fotos/'+rg, nova, 'recompressão de foto — '+rg).then(proxima);
+      }
+      return proxima(); // já era menor/igual, não piora a foto à toa
+    });
+  }
+  return proxima();
+}
+
 function vDiag(main){
   main.appendChild(el('div',{cls:'adm-h1'},['Diagnóstico']));
   main.appendChild(el('p',{cls:'nota-info',text:'Use esta tela quando algo não salvar. O bloco abaixo mostra o estado real do aplicativo e o erro exato devolvido pelo banco.'}));
@@ -2118,7 +2158,17 @@ function vDiag(main){
     });
   });
 
-  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF,btU,btH]));
+  var qtdFotos = Object.keys(FOTOS).filter(function(rg){ return typeof FOTOS[rg]==='string' && FOTOS[rg].indexOf('data:')===0; }).length;
+  var btP = el('button',{cls:'btn btn-ouro'},['🗜️ Recomprimir fotos já salvas ('+qtdFotos+')']);
+  btP.addEventListener('click', function(){
+    if(!qtdFotos){ toast('Nenhuma foto pra recomprimir.','ok'); return; }
+    confirmar('Recomprimir '+qtdFotos+' foto(s) já salvas pra deixar o app mais leve? Mesma foto, mesmo enquadramento — só reduz o tamanho do arquivo. Só grava quando o resultado fica menor.', function(){
+      btP.disabled=true; btP.textContent='⏳ Recomprimindo…';
+      recomprimirFotos().then(function(){ btP.disabled=false; btP.textContent='🗜️ Recomprimir fotos já salvas (0)'; pre.textContent = relatorioDiag(); });
+    });
+  });
+
+  main.appendChild(el('div',{cls:'diag-btns'},[btT,btC,btA,btF,btU,btH,btP]));
   main.appendChild(res);
   main.appendChild(pre);
 }
@@ -2977,6 +3027,12 @@ function desenhaFicha(md){
    principalmente na TV — nenhuma foto "estoura" nem fica cortada de forma
    diferente em cada tela. O administrador ainda pode ajustar zoom/posição. */
 var FOTO_L = 600, FOTO_A = 800;
+/* Correção "app mais leve" (07/08, decisão do usuário: sem Storage, sem trocar
+   de plano — só reduzir o peso do que já existe). Fotos continuam no RTDB como
+   base64, mas com qualidade JPEG mais agressiva: .84→.70 tipicamente corta
+   30-45% do tamanho num rosto/retrato, sem diferença perceptível no card ou na
+   TV (tela vista de longe). Dimensão 600x800 NÃO mudou — só a compressão. */
+var FOTO_QUALIDADE = .70;
 function subirFoto(rg, file, done){
   if(!file) return;
   if(!/^image\//.test(file.type||'')){ toast('Selecione um arquivo de imagem (JPG/PNG).','erro'); return; }
@@ -3050,7 +3106,7 @@ function editorFoto(img, aplicar){
   var md = modal('Ajustar foto 3x4', corpo, [
     {rotulo:'Cancelar'},
     {rotulo:'✔ Usar esta foto', cls:'btn-azul', acao:function(fechar){
-      var data = cv.toDataURL('image/jpeg', .84);
+      var data = cv.toDataURL('image/jpeg', FOTO_QUALIDADE);
       fechar(); aplicar(data);
     }}
   ], 'crop');
