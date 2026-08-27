@@ -386,7 +386,7 @@ var AUTH_ERRO = '';      // motivo legível de o Auth estar indisponível
 var MODO_LEGADO = '';    // preenchido quando a sessão entrou pelo hash antigo
 var DESTAQUES = {};      // espelha coep1/destaques — nomeação manual do destaque do mês
 var AUTH_PRONTO = false; // true depois que o Firebase resolveu se há usuário autenticado
-var VERSAO = 'v38 · 2026-08-07 · NOVO (pedido do usuário, app mais leve — sem Storage/sem trocar de plano, opção escolhida entre 2): fotos continuam no RTDB, mas com qualidade JPEG menor no upload (.84→.70, FOTO_QUALIDADE) — mesma dimensão 600x800, ~20-30% menor sem diferença perceptível no card/TV (medido com imagem sintética: -22%). Botão "🗜️ Recomprimir fotos já salvas" em Diagnóstico recomprime em lote as 142 fotos existentes, mesma foto/enquadramento, só grava quando o resultado fica realmente menor (nunca piora à toa). Testado com canvas nativo real (pacote "canvas", decodificação e reencode de verdade, não simulado) — 12 testes novos + os 59 anteriores (28 correções ambiguidade + 31 seções) continuam verdes, total 71 headless, zero erro JS. --card-col/--card-fs NÃO tocados. Mantém v37, v36, v35.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
+var VERSAO = 'v39 · 2026-08-27 · CORREÇÃO (falso "CNH/Curso vencido" real, RG 67172 reportado com print): vencMaisProximo() lia m.aptidoes[], campo órfão da importação original (v20) sem NENHUMA aba/UI de edição no app — dado nunca visto/preenchido pelo admin ficava contando como vencimento real. 36/142 militares têm aptidoes[] no seed; 20 já com data vencida hoje. Leitura de m.aptidoes removida de vencMaisProximo(); aptidão sanitária real (Apto A/B/C) já vem de ficha.saude/saudeFuncional, aba Saúde, com "Venc. não informado" correto quando sem data. Nenhum outro trecho do código lia m.aptidoes (grep confirmado). Testado: 3 cenários headless novos (aptidoes vencido isolado → sem alerta; habilitação vencida real → mantém alerta; cursos vencido real → mantém alerta) + regressão dos 71 testes anteriores. Mantém v38, v37, v36, v35.';   // carimbo de build: permite provar QUAL arquivo está aberto no aparelho
 /* ROTEIRO_INTERNO v12 (28/07/2026)
    CAUSA RAIZ REAL (confirmada com diagnóstico ao vivo do usuário, não suposição): o diagnóstico mostrou
    "Usuário do Auth: ...(anônimo)" ao mesmo tempo que "Sessão: RG 82061 · raiz" — o Firebase Authentication
@@ -822,7 +822,6 @@ function vencMaisProximo(m){
   var hj = new Date(hoje()+'T00:00:00');
   var datas = [];
   if(m.habilitacao && m.habilitacao.validade) datas.push(m.habilitacao.validade);
-  (m.aptidoes||[]).forEach(function(a){ if(a.validade) datas.push(a.validade); });
   (m.cursos||[]).forEach(function(c){ if(c.validade) datas.push(c.validade); });
   var best=null;
   datas.forEach(function(d){
@@ -832,14 +831,31 @@ function vencMaisProximo(m){
   });
   return best;
 }
+/* CORREÇÃO 27/08/2026 (v39, falso "CNH/Curso vencido" real, RG 67172 Nélio Leandro
+   do Carmo — reportado com print da ficha): vencMaisProximo() lia m.aptidoes[], um
+   campo trazido pela importação original em lote (v20, 142 fichas) que NUNCA teve
+   aba/formulário de edição no app (grep confirmou: só existe no seed, no default de
+   registro novo, e nesta leitura — nenhuma tela grava nele). RG 67172 tinha
+   aptidoes:[{tipo:'Aptidão física', validade:'2026-07-08'}] intacto desde o import,
+   hoje no passado, sem QUALQUER forma de o administrador corrigir ou confirmar essa
+   data pela interface — o card mostrava "vencido" para um dado que o admin nunca
+   viu nem preencheu, contrariando a regra "só alerta com data explícita cadastrada
+   PELO ADMIN". Auditoria no seed: 36 dos 142 militares têm aptidoes[] não-vazio;
+   20 já com validade vencida hoje (27/08/2026) — mesmo bug, latente, potencialmente
+   afetando os outros 19 cards sem ninguém ter reportado ainda. Aptidão sanitária de
+   verdade já migrou para ficha.saude/saudeFuncional (aba Saúde, Apto A/B/C — essa
+   SIM tem UI própria e trata ausência de data corretamente, "Venc. não informado").
+   Removida a leitura de m.aptidoes de vencMaisProximo(); campo não é apagado do
+   banco (fora do escopo, e sem acesso de escrita à produção), só deixa de alimentar
+   qualquer alerta. Nenhum outro trecho do código lê m.aptidoes (grep confirmado) —
+   correção fecha a classe de bug inteira, não só o card. */
 
 /* ---------- validade de documentos/aptidão sanitária (fonte única) ----------
    Reutiliza o mesmo período "próximo do vencimento" (60 dias) já usado por
    vencMaisProximo()/dashboard/filtros — não inventa um novo prazo. NÃO reaproveita
-   vencMaisProximo() em si: aquela função lê m.habilitacao/m.aptidoes/m.cursos, que
-   são dados DIFERENTES da aptidão sanitária (ficha.saude) e dos documentos
-   anexados (DOCS) — misturar as fontes seria presumir correspondência que o
-   código não comprova. */
+   vencMaisProximo() em si: aquela função lê m.habilitacao/m.cursos, que são dados
+   DIFERENTES da aptidão sanitária (ficha.saude) e dos documentos anexados (DOCS) —
+   misturar as fontes seria presumir correspondência que o código não comprova. */
 var PRAZO_A_VENCER_DIAS = 60;
 function classificaValidade(dataISO){
   if(!dataISO) return {status:'SEM_VALIDADE', dias:null};
