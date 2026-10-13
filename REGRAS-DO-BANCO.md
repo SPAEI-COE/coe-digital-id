@@ -12,7 +12,14 @@ painel da TV.
 | Administrador | Authentication (RG + senha) | leitura e escrita |
 | Qualquer outro | — | nada |
 
-A escrita é liberada apenas para UIDs presentes em `coep1/admins_uid`. Esse nó
+> **Banco compartilhado:** o mesmo Realtime Database serve outros apps do SPAEI
+> (`spaei`, `spaei-digital`, `sei-digital`, `p1digital`), que **não usam Firebase
+> Authentication** e dependem das regras abertas desses nós, já declaradas em
+> `database.rules.json`. O Console substitui o conjunto inteiro ao publicar:
+> cole sempre o arquivo completo — apagar um desses blocos derruba o app
+> correspondente.
+
+A escrita em `coep1` é liberada apenas para UIDs presentes em `coep1/admins_uid`. Esse nó
 **não é auto-gravável**: ninguém consegue se promover a administrador sozinho.
 Quem cadastra o UID de um novo administrador é um administrador já autorizado,
 pela tela **Administradores** do painel.
@@ -44,15 +51,14 @@ Se algo falhar, o botão de teste mostra o código exato devolvido pelo banco.
 
 ## Publicação automática (opcional, depois de validado)
 
-Para o GitHub Actions publicar as regras junto com o site, a conta de serviço
-`FIREBASE_SERVICE_ACCOUNT_SPAEI_DIGITAL` precisa do papel **Firebase Realtime
-Database Admin** no projeto, e o `firebase.json` precisa declarar:
+O `firebase.json` já declara `"database": { "rules": "database.rules.json" }`,
+mas o workflow `firebase-deploy.yml` usa a action de **Hosting**, que publica só o
+site e ignora essa seção. Para publicar as regras junto, o workflow precisaria
+rodar `firebase deploy --only database,hosting` e a conta de serviço
+`FIREBASE_SERVICE_ACCOUNT_SPAEI_DIGITAL` precisaria do papel **Firebase Realtime
+Database Admin** (sem o papel, o deploy inteiro — inclusive o site — falha).
 
-```json
-"database": { "rules": "database.rules.json" }
-```
-
-Enquanto esse papel não for concedido, mantenha a publicação manual do passo 3.
+Enquanto isso não for feito, mantenha a publicação manual do passo 3.
 
 ## Pendência de LGPD já identificada
 
